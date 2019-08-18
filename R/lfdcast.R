@@ -4,7 +4,8 @@ lfdcast <- function(x, lhs, rhs,
                     fun.aggregate = c("count", "existence", "sum"),
                     sep = "_",
                     value.var = NULL, na.rm = FALSE,
-                    rhs_keep = NULL) {
+                    rhs_keep = NULL,
+                    nthread = 2L) {
   fun.aggregate <- match.arg(fun.aggregate)
 
   row_ranks <- data.table::frankv(x, cols = lhs, ties.method = "dense")
@@ -42,9 +43,12 @@ lfdcast <- function(x, lhs, rhs,
   cols_res <- rep(NA_integer_, length(col_grp_starts))
   cols_res[which(rhs_keep)] <- seq_len(sum(!is.na(rhs_keep)))
 
+  cols_split <- split(seq_along(col_grp_starts), sample.int(nthread, length(col_grp_starts), replace = TRUE))
+
   col_grp_starts <- c(col_grp_starts, nrow(x) + 1L)
   res <- .Call("lfdcast", match(fun.aggregate, eval(formals()[["fun.aggregate"]])),
-               x[[value.var]], na.rm, res, col_order, col_grp_starts, cols_res, row_ranks,
+               x[[value.var]], na.rm, cols_split, res, col_order, col_grp_starts, cols_res, row_ranks,
+               as.integer(nthread),
                PACKAGE = "lfdcast")
 
   # col_cntr <- 1L
