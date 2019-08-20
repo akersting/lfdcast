@@ -71,7 +71,7 @@ lfdcast <- function(x, lhs, rhs,
       res_list <- c(res_list,
                     list(.Call("lfdcast", match(fun, eval(formals()[["fun.aggregate"]])),
                                x[[vvar]], na.rm[[i]][j], cols_split, res, col_order, col_grp_starts, cols_res, row_ranks,
-                               min(as.integer(nthread), n_col),
+                               min(as.integer(nthread), length(cols_split)),
                                PACKAGE = "lfdcast")))
     }
   }
