@@ -81,6 +81,12 @@ lfdcast <- function(x, lhs, rhs,
   row_ranks_unique_pos_ordered <- row_ranks_unique_pos[order(row_ranks_unique)]
   id_cols <- x[row_ranks_unique_pos_ordered, lhs, drop = FALSE]
 
-  res <- data.table::setDF(c(id_cols, unlist(res_list, recursive = FALSE)))
+  if (data.table::is.data.table(x)) {
+    res <- data.table::setDT(c(id_cols, unlist(res_list, recursive = FALSE)))
+    data.table::setattr(res, "sorted", lhs)
+  } else {
+    res <- data.table::setDF(c(id_cols, unlist(res_list, recursive = FALSE)))
+  }
+
   res
 }
