@@ -9,8 +9,8 @@ lfdcast <- function(x, lhs, rhs,
   if (missing(fun.aggregate))
     fun.aggregate <- match.arg(fun.aggregate)
 
-  row_ranks <- data.table::frankv(x, cols = lhs, ties.method = "dense")
-  n_row <- max(row_ranks)
+  row_ranks <- data.table::frankv(x, cols = lhs, ties.method = "dense") - 1L
+  n_row <- max(row_ranks) + 1L
 
   res_list <- list()
 
@@ -30,7 +30,8 @@ lfdcast <- function(x, lhs, rhs,
     if (length(col_order) == 0L) col_order <- seq_len(nrow(x))
 
     x_rhs <- x[col_order[col_grp_starts], r, drop = FALSE]
-    col_grp_starts <- c(col_grp_starts, nrow(x) + 1L)
+    col_grp_starts <- c(col_grp_starts - 1L, nrow(x))
+    col_order <- col_order - 1L
 
     if (!is.null(rhs_keep[[i]])) {
       this_rhs_keep <- data.table:::merge.data.table(x_rhs,
@@ -41,9 +42,9 @@ lfdcast <- function(x, lhs, rhs,
     }
 
     cols_res <- rep(NA_integer_, n_col)
-    cols_res[which(this_rhs_keep)] <- seq_len(sum(!is.na(this_rhs_keep)))
+    cols_res[which(this_rhs_keep)] <- seq(0L, length.out = sum(!is.na(this_rhs_keep)))
 
-    cols_split <- split(seq_len(n_col), sample.int(nthread, n_col, replace = nthread < n_col))
+    cols_split <- split(seq(0L, length.out = n_col), sample.int(nthread, n_col, replace = nthread < n_col))
 
     for (j in seq_along(fun.aggregate[[i]])) {
       fun <- fun.aggregate[[i]][j]

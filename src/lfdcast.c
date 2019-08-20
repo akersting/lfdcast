@@ -15,15 +15,15 @@ struct thread_data {
 
 #define CAST_START                                             \
   for (int jj = 0; jj < LENGTH(cols_split); jj++) {            \
-    int j = INTEGER(cols_split)[jj] - 1;                       \
+    int j = INTEGER(cols_split)[jj];                           \
     if (INTEGER(cols_res)[j] == NA_INTEGER) continue;          \
                                                                \
-    SEXP col = VECTOR_ELT(res, INTEGER(cols_res)[j] - 1);      \
+    SEXP col = VECTOR_ELT(res, INTEGER(cols_res)[j]);          \
                                                                \
-    for (int ii = INTEGER(col_grp_starts)[j] - 1;              \
-         ii < INTEGER(col_grp_starts)[j + 1] - 1;              \
+    for (int ii = INTEGER(col_grp_starts)[j];                  \
+         ii < INTEGER(col_grp_starts)[j + 1];                  \
          ii++) {                                               \
-      int i = INTEGER(col_order)[ii] - 1;                      \
+      int i = INTEGER(col_order)[ii];                          \
 
 #define CAST_END                                               \
     }                                                          \
@@ -44,27 +44,27 @@ void *lfdcast_core(void *td_void) {
   switch(INTEGER(agg)[0]) {
   case 1: // count
     CAST_START
-    (INTEGER(col)[INTEGER(row_ranks)[i] - 1])++;
+    (INTEGER(col)[INTEGER(row_ranks)[i]])++;
     CAST_END
       break;
   case 2: // existence
     CAST_START
-    LOGICAL(col)[INTEGER(row_ranks)[i] - 1] = TRUE;
+    LOGICAL(col)[INTEGER(row_ranks)[i]] = TRUE;
     CAST_END
       break;
   case 3: // sum
     if (TYPEOF(value_var) == LGLSXP) {
       CAST_START
-      if (INTEGER(col)[INTEGER(row_ranks)[i] - 1] == NA_INTEGER) {
+      if (INTEGER(col)[INTEGER(row_ranks)[i]] == NA_INTEGER) {
         continue;
       } else if (LOGICAL(value_var)[i] == NA_LOGICAL) {
         if (LOGICAL(na_rm)[0]) {
           continue;
         } else {
-          INTEGER(col)[INTEGER(row_ranks)[i] - 1] = NA_INTEGER;
+          INTEGER(col)[INTEGER(row_ranks)[i]] = NA_INTEGER;
         }
       } else {
-        INTEGER(col)[INTEGER(row_ranks)[i] - 1] += LOGICAL(value_var)[i];
+        INTEGER(col)[INTEGER(row_ranks)[i]] += LOGICAL(value_var)[i];
       }
       CAST_END
     } else if (TYPEOF(value_var) == INTSXP) {
@@ -73,10 +73,10 @@ void *lfdcast_core(void *td_void) {
         if (LOGICAL(na_rm)[0]) {
           continue;
         } else {
-          REAL(col)[INTEGER(row_ranks)[i] - 1] = NA_REAL;
+          REAL(col)[INTEGER(row_ranks)[i]] = NA_REAL;
         }
       } else {
-        REAL(col)[INTEGER(row_ranks)[i] - 1] += INTEGER(value_var)[i];
+        REAL(col)[INTEGER(row_ranks)[i]] += INTEGER(value_var)[i];
       }
       CAST_END
     } else if (TYPEOF(value_var) == REALSXP) {
@@ -84,7 +84,7 @@ void *lfdcast_core(void *td_void) {
       if (LOGICAL(na_rm)[0] && REAL(value_var)[i] == NA_REAL) {
         continue;
       } else {
-        REAL(col)[INTEGER(row_ranks)[i] - 1] += REAL(value_var)[i];
+        REAL(col)[INTEGER(row_ranks)[i]] += REAL(value_var)[i];
       }
       CAST_END
     } /*else {
