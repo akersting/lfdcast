@@ -87,9 +87,9 @@ void *lfdcast_core(void *td_void) {
         REAL(col)[INTEGER(row_ranks)[i] - 1] += REAL(value_var)[i];
       }
       CAST_END
-    } else {
+    } /*else {
       error("value.var must be numeric or logical if fun.aggregate == 'sum'");
-    }
+    }*/
     break;
   }
 
@@ -138,21 +138,6 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm, SEXP cols_split,
   }
 
   if (failure) error("something went wrong");
-
-  /*int col_cntr = 0;
-
-  for (int j = 0; j < LENGTH(col_grp_starts) - 1; j++) {
-    if (INTEGER(cols_res)[j] == NA_INTEGER) continue;
-
-    SEXP col = VECTOR_ELT(res, col_cntr);
-
-    for (int ii = INTEGER(col_grp_starts)[j] - 1;
-         ii < INTEGER(col_grp_starts)[j + 1] - 1;
-         ii++) {
-      int i = INTEGER(col_order)[ii] - 1;*/
-  /*  }
-    col_cntr++;
-  }*/
 
   return res;
 }

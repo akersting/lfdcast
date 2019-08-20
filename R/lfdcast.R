@@ -6,7 +6,8 @@ lfdcast <- function(x, lhs, rhs,
                     value.var = NA_character_, na.rm = FALSE,
                     rhs_keep = NULL,
                     nthread = 2L) {
-  # fun.aggregate <- match.arg(fun.aggregate)
+  if (missing(fun.aggregate))
+    fun.aggregate <- match.arg(fun.aggregate)
 
   row_ranks <- data.table::frankv(x, cols = lhs, ties.method = "dense")
   n_row <- max(row_ranks)
@@ -33,7 +34,7 @@ lfdcast <- function(x, lhs, rhs,
 
     if (!is.null(rhs_keep[[i]])) {
       this_rhs_keep <- data.table:::merge.data.table(x_rhs,
-                                                     cbind(rhs_keep[[i]], "__LFDCAST__KEEP__" = TRUE),
+                                                     cbind(unique(rhs_keep[[i]]), "__LFDCAST__KEEP__" = TRUE),
                                                      all.x = TRUE, sort = FALSE)[["__LFDCAST__KEEP__"]]
     } else {
       this_rhs_keep <- rep(TRUE, nrow(x_rhs))
@@ -42,7 +43,7 @@ lfdcast <- function(x, lhs, rhs,
     cols_res <- rep(NA_integer_, n_col)
     cols_res[which(this_rhs_keep)] <- seq_len(sum(!is.na(this_rhs_keep)))
 
-    cols_split <- split(seq_len(n_col), sample.int(nthread, n_col, replace = TRUE))
+    cols_split <- split(seq_len(n_col), sample.int(nthread, n_col, replace = nthread < n_col))
 
     for (j in seq_along(fun.aggregate[[i]])) {
       fun <- fun.aggregate[[i]][j]
@@ -55,6 +56,8 @@ lfdcast <- function(x, lhs, rhs,
       } else if (fun %in% c() ||
                  (fun == "sum" && is.numeric(x[[vvar]]))) {
         default <- 0
+      } else {
+        stop("invalid 'fun.aggregate - value.var' combination found")
       }
       res <- data.table::setDF(lapply(seq_len(sum(!is.na(this_rhs_keep))),
                                       function(i, x, times) rep.int(x, times),
@@ -68,27 +71,15 @@ lfdcast <- function(x, lhs, rhs,
       res_list <- c(res_list,
                     list(.Call("lfdcast", match(fun, eval(formals()[["fun.aggregate"]])),
                                x[[vvar]], na.rm[[i]][j], cols_split, res, col_order, col_grp_starts, cols_res, row_ranks,
-                               as.integer(nthread),
+                               min(as.integer(nthread), n_col),
                                PACKAGE = "lfdcast")))
     }
   }
-
-  # col_cntr <- 1L
-  # for (j in seq_len(n_col)) {
-  #   if (is.na(rhs_keep[j])) next
-  #
-  #   for (i in col_order[seq(col_grp_starts[j], col_grp_starts[j + 1L] - 1L)]) {
-  #     res[row_ranks[i], col_cntr] <- res[row_ranks[i], col_cntr] + 1L
-  #   }
-  #   col_cntr <- col_cntr + 1L
-  # }
-
 
   row_ranks_unique_pos <- which(!duplicated(row_ranks, nmax = n_row))
   row_ranks_unique <- row_ranks[row_ranks_unique_pos]
   row_ranks_unique_pos_ordered <- row_ranks_unique_pos[order(row_ranks_unique)]
   id_cols <- x[row_ranks_unique_pos_ordered, lhs, drop = FALSE]
-  # attr(id_cols, "row.names") <- .set_row_names(nrow(id_cols))
 
   res <- data.table::setDF(c(id_cols, unlist(res_list, recursive = FALSE)))
   res
