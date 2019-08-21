@@ -69,9 +69,11 @@ lfdcast <- function(x, lhs, rhs,
       if (!is.null(names(rhs)))
         names(res) <- paste(names(rhs)[i], names(res), sep = sep)
 
+      value_var <- x[[vvar]]
+      if (is.character(value_var)) value_var <- enc2utf8(value_var)
       res_list <- c(res_list,
                     list(.Call("lfdcast", match(fun, eval(formals()[["fun.aggregate"]])),
-                               x[[vvar]], na.rm[[i]][j], cols_split, res, col_order, col_grp_starts, cols_res, row_ranks,
+                               value_var, na.rm[[i]][j], cols_split, res, col_order, col_grp_starts, cols_res, row_ranks,
                                min(as.integer(nthread), length(cols_split)),
                                PACKAGE = "lfdcast")))
     }
