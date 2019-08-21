@@ -1,7 +1,7 @@
 #' @useDynLib lfdcast
 #' @export
 lfdcast <- function(x, lhs, rhs,
-                    fun.aggregate = c("count", "existence", "sum"),
+                    fun.aggregate = c("count", "existence", "sum", "uniqueN"),
                     sep = "_",
                     value.var = NA_character_, na.rm = FALSE,
                     rhs_keep = NULL,
@@ -51,7 +51,7 @@ lfdcast <- function(x, lhs, rhs,
       vvar <- value.var[[i]][j]
       if (fun %in% c("existence")) {
         default <- FALSE
-      } else if (fun %in% c("count") ||
+      } else if (fun %in% c("count", "uniqueN") ||
                  (fun == "sum" && is.logical(x[[vvar]]))) {
         default <- 0L
       } else if (fun %in% c() ||
