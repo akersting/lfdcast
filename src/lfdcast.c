@@ -46,6 +46,55 @@ int uniqueN_int_cmp(const void *x, const void *y) {
   }
 }
 
+
+struct uniqueN_double_data {
+  int rank;
+  double value;
+};
+
+int uniqueN_double_cmp(const void *x, const void *y) {
+  struct uniqueN_double_data *xx = (struct uniqueN_double_data *) x;
+  struct uniqueN_double_data *yy = (struct uniqueN_double_data *) y;
+
+  if (xx->rank < yy->rank) {
+    return -1;
+  } else if (xx->rank > yy->rank) {
+    return 1;
+  } else {
+    // NA < NaN < -Inf < ...
+    if (ISNA(xx->value)) {
+      if (ISNA(yy->value)) {
+        return 0;
+      } else {
+        return -1;
+      }
+    }
+
+    if (R_IsNaN(xx->value)) {
+      if (ISNA(yy->value)) {
+        return 1;
+      } else if (R_IsNaN(yy->value)) {
+        return 0;
+      } else
+        return -1;
+    }
+
+    if (ISNAN(yy->value)) {
+      return 1;
+    }
+
+    if (xx->value < yy->value) {
+      return -1;
+    } else if (xx->value > yy->value) {
+      return 1;
+    } else {
+      return 0;
+    }
+  }
+}
+
+
+
 #define CAST_START                                             \
   for (int jj = 0; jj < length_cols_split; jj++) {             \
     int j = cols_split[jj];                                    \
@@ -127,38 +176,76 @@ void *lfdcast_core(void *td_void) {
     }*/
     break;
   case 4: // uniqueN
-    for (int jj = 0; jj < length_cols_split; jj++) {
-      int j = cols_split[jj];
-      if (cols_res[j] == NA_INTEGER) continue;
+    if (typeof_value_var == LGLSXP || typeof_value_var == INTSXP) {
+      for (int jj = 0; jj < length_cols_split; jj++) {
+        int j = cols_split[jj];
+        if (cols_res[j] == NA_INTEGER) continue;
 
-      void *col = res[cols_res[j]];
+        void *col = res[cols_res[j]];
 
-      struct uniqueN_int_data *uniqueN_data =
-        (struct uniqueN_int_data *) malloc((col_grp_starts[j + 1] - col_grp_starts[j]) * sizeof(struct uniqueN_int_data));
+        struct uniqueN_int_data *uniqueN_data =
+          (struct uniqueN_int_data *) malloc((col_grp_starts[j + 1] - col_grp_starts[j]) * sizeof(struct uniqueN_int_data));
 
-      for (int ii = col_grp_starts[j], cntr = 0;
-           ii < col_grp_starts[j + 1];
-           ii++, cntr++) {
-        int i = col_order[ii];
-        (uniqueN_data + cntr)->rank = row_ranks[i];
-        (uniqueN_data + cntr)->value = ((int *)value_var)[i];
-      }
-
-      qsort(uniqueN_data, col_grp_starts[j + 1] - col_grp_starts[j], sizeof(struct uniqueN_int_data), uniqueN_int_cmp);
-
-      ((int *) col)[(uniqueN_data)->rank] = 1;
-      for (int i = 1; i < col_grp_starts[j + 1] - col_grp_starts[j]; i ++) {
-        if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
-          if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
-            ((int *) col)[(uniqueN_data + i)->rank]++;
-          }
-        } else {
-          ((int *) col)[(uniqueN_data + i)->rank] = 1;
+        for (int ii = col_grp_starts[j], cntr = 0;
+             ii < col_grp_starts[j + 1];
+             ii++, cntr++) {
+          int i = col_order[ii];
+          (uniqueN_data + cntr)->rank = row_ranks[i];
+          (uniqueN_data + cntr)->value = ((int *)value_var)[i];
         }
-      }
 
-      free(uniqueN_data);
+        qsort(uniqueN_data, col_grp_starts[j + 1] - col_grp_starts[j], sizeof(struct uniqueN_int_data), uniqueN_int_cmp);
+
+        ((int *) col)[(uniqueN_data)->rank] = 1;
+        for (int i = 1; i < col_grp_starts[j + 1] - col_grp_starts[j]; i ++) {
+          if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
+            if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
+              ((int *) col)[(uniqueN_data + i)->rank]++;
+            }
+          } else {
+            ((int *) col)[(uniqueN_data + i)->rank] = 1;
+          }
+        }
+
+        free(uniqueN_data);
+      }
+    } else if (typeof_value_var == REALSXP) {
+      for (int jj = 0; jj < length_cols_split; jj++) {
+        int j = cols_split[jj];
+        if (cols_res[j] == NA_INTEGER) continue;
+
+        void *col = res[cols_res[j]];
+
+        struct uniqueN_double_data *uniqueN_data =
+          (struct uniqueN_double_data *) malloc((col_grp_starts[j + 1] - col_grp_starts[j]) * sizeof(struct uniqueN_double_data));
+
+        for (int ii = col_grp_starts[j], cntr = 0;
+             ii < col_grp_starts[j + 1];
+             ii++, cntr++) {
+          int i = col_order[ii];
+          (uniqueN_data + cntr)->rank = row_ranks[i];
+          (uniqueN_data + cntr)->value = ((double *)value_var)[i];
+        }
+
+        qsort(uniqueN_data, col_grp_starts[j + 1] - col_grp_starts[j], sizeof(struct uniqueN_double_data), uniqueN_double_cmp);
+
+        ((int *) col)[(uniqueN_data)->rank] = 1;
+        for (int i = 1; i < col_grp_starts[j + 1] - col_grp_starts[j]; i ++) {
+          if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
+            if ((ISNA((uniqueN_data + i)->value) != ISNA((uniqueN_data + i - 1)->value)) ||
+                (R_IsNaN((uniqueN_data + i)->value) != R_IsNaN((uniqueN_data + i - 1)->value)) ||
+                (!ISNAN((uniqueN_data + i)->value) && !ISNAN((uniqueN_data + i - 1)->value) && (uniqueN_data + i)->value != (uniqueN_data + i - 1)->value)) {
+              ((int *) col)[(uniqueN_data + i)->rank]++;
+            }
+          } else {
+            ((int *) col)[(uniqueN_data + i)->rank] = 1;
+          }
+        }
+
+        free(uniqueN_data);
+      }
     }
+
     break;
   }
 
