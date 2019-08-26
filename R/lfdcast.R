@@ -24,25 +24,34 @@ lfdcast <- function(x, lhs, rhs,
   for (i in seq_along(rhs)) {
     r <- rhs[[i]]
 
-    col_order <- data.table:::forderv(x, by = r, retGrp = TRUE, sort = TRUE)
-    col_grp_starts <- attr(col_order, "starts")
-    n_col <- length(col_grp_starts)
-    if (length(col_order) == 0L) col_order <- seq_len(nrow(x))
+    if (length(r) > 0L) {
+      col_order <- data.table:::forderv(x, by = r, retGrp = TRUE, sort = TRUE)
+      col_grp_starts <- attr(col_order, "starts")
+      n_col <- length(col_grp_starts)
+      if (length(col_order) == 0L) col_order <- seq_len(nrow(x))
 
-    x_rhs <- x[col_order[col_grp_starts], r, drop = FALSE]
-    col_grp_starts <- c(col_grp_starts - 1L, nrow(x))
-    col_order <- col_order - 1L
+      x_rhs <- x[col_order[col_grp_starts], r, drop = FALSE]
+      col_grp_starts <- c(col_grp_starts - 1L, nrow(x))
+      col_order <- col_order - 1L
 
-    if (!is.null(rhs_keep[[i]])) {
-      this_rhs_keep <- data.table:::merge.data.table(x_rhs,
-                                                     cbind(unique(rhs_keep[[i]]), "__LFDCAST__KEEP__" = TRUE),
-                                                     all.x = TRUE, sort = FALSE)[["__LFDCAST__KEEP__"]]
+      if (!is.null(rhs_keep[[i]])) {
+        this_rhs_keep <- data.table:::merge.data.table(x_rhs,
+                                                       cbind(unique(rhs_keep[[i]]), "__LFDCAST__KEEP__" = TRUE),
+                                                       all.x = TRUE, sort = FALSE)[["__LFDCAST__KEEP__"]]
+      } else {
+        this_rhs_keep <- rep(TRUE, nrow(x_rhs))
+      }
+
+      cols_res <- rep(NA_integer_, n_col)
+      cols_res[which(this_rhs_keep)] <- seq(0L, length.out = sum(!is.na(this_rhs_keep)))
     } else {
-      this_rhs_keep <- rep(TRUE, nrow(x_rhs))
+      col_order <- seq(0L, length.out = nrow(x))
+      col_grp_starts <- c(0L, nrow(x))
+      n_col <- 1L
+      this_rhs_keep <- TRUE
+      cols_res <- 0L
     }
 
-    cols_res <- rep(NA_integer_, n_col)
-    cols_res[which(this_rhs_keep)] <- seq(0L, length.out = sum(!is.na(this_rhs_keep)))
 
     cols_split <- split(seq(0L, length.out = n_col), sample.int(nthread, n_col, replace = nthread < n_col))
 
@@ -63,11 +72,18 @@ lfdcast <- function(x, lhs, rhs,
       res <- data.table::setDF(lapply(seq_len(sum(!is.na(this_rhs_keep))),
                                       function(i, x, times) rep.int(x, times),
                                       x = default, times = n_row))
-      names(res) <- do.call(paste, c(unname(x_rhs[which(this_rhs_keep), , drop = FALSE]), sep = sep))
-      if (!is.null(names(fun.aggregate[[i]])))
-        names(res) <- paste(names(fun.aggregate[[i]])[j], names(res), sep = sep)
-      if (!is.null(names(rhs)))
-        names(res) <- paste(names(rhs)[i], names(res), sep = sep)
+
+      if (length(r) > 0L) {
+        res_names <- do.call(paste, c(unname(x_rhs[which(this_rhs_keep), , drop = FALSE]), sep = sep))
+        if (!is.null(names(fun.aggregate[[i]])))
+          res_names <- paste(names(fun.aggregate[[i]])[j], res_names, sep = sep)
+        if (!is.null(names(rhs)))
+          res_names <- paste(names(rhs)[i], res_names, sep = sep)
+      } else {
+        res_names <- names(fun.aggregate[[i]])[j]
+      }
+
+      names(res) <- res_names
 
       value_var <- x[[vvar]]
       if (is.character(value_var)) value_var <- enc2utf8(value_var)
