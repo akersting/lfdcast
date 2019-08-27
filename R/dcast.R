@@ -65,12 +65,12 @@ dcast <- function(X, by, to, fun.aggregate, value.var, to.keep = NULL,
       if (fun %in% c("existence")) {
         default <- FALSE
       } else if (fun %in% c("count", "uniqueN") ||
-                 (fun == "sum" && is.logical(X[[vvar]]))
+                 (fun == "sum" && is.logical(X[[vvar]])) ||
                  (fun %in% c("min", "max") && (is.logical(X[[vvar]]) ||
                                                is.integer(X[[vvar]])))) {
         default <- 0L
       } else if (fun %in% c() ||
-                 (fun == "sum" && is.numeric(X[[vvar]]))
+                 (fun == "sum" && is.numeric(X[[vvar]])) ||
                  (fun %in% c("min", "max") && is.numeric(X[[vvar]]))) {
         default <- 0
       } else {
@@ -120,6 +120,7 @@ dcast <- function(X, by, to, fun.aggregate, value.var, to.keep = NULL,
     lengths_map_output_cols_to_input_rows = list(unlist(lapply(arg_list_for_core[["map_output_cols_to_input_rows"]], length))),
     map_input_rows_to_output_rows = list(map_input_rows_to_output_rows),
     cols_split = list(cols_split),
+    n_row_output_SEXP = n_row_output,
     nthread_SEXP = min(as.integer(nthread), length(cols_split)),
     PACKAGE = "lfdcast"
   )

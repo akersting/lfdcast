@@ -20,6 +20,7 @@ struct thread_data {
   int **map_output_cols_to_input_rows;
   int *map_output_cols_to_input_rows_lengths;
   int *map_input_rows_to_output_rows;
+  int n_row_output;
 };
 
 
@@ -135,6 +136,7 @@ void *lfdcast_core(void *td_void) {
   int **map_output_cols_to_input_rows = td->map_output_cols_to_input_rows;
   int *map_output_cols_to_input_rows_lengths = td->map_output_cols_to_input_rows_lengths;
   int *map_input_rows_to_output_rows = td->map_input_rows_to_output_rows;
+  int n_row_output = td->n_row_output;
 
   for (int jj = 0; jj < length_cols_split; jj++) {
     int j = cols_split[jj];
@@ -302,6 +304,129 @@ void *lfdcast_core(void *td_void) {
       break;
     }
 
+    case 5:  // min
+    {
+      if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
+        int *output = ((int **) res)[j];
+        int *input = ((int **) value_var)[j];
+
+        char *hit = (char *) calloc(n_row_output, sizeof(char));
+
+        LOOP_OVER_ROWS {
+          if ((typeof_value_var[j] == LGLSXP && input[i] == NA_LOGICAL) ||
+              (typeof_value_var[j] == INTSXP && input[i] == NA_INTEGER)) {
+            if (na_rm[j]) {
+              continue;
+            } else {
+              output[map_input_rows_to_output_rows[i]] = NA_INTEGER;
+              hit[map_input_rows_to_output_rows[i]] = 1;
+            }
+          } else if (hit[map_input_rows_to_output_rows[i]]) {
+            if (output[map_input_rows_to_output_rows[i]] != NA_INTEGER) {
+              output[map_input_rows_to_output_rows[i]] =
+                input[i] < output[map_input_rows_to_output_rows[i]] ?
+                input[i] : output[map_input_rows_to_output_rows[i]];
+            }
+          } else {
+            output[map_input_rows_to_output_rows[i]] = input[i];
+            hit[map_input_rows_to_output_rows[i]] = 1;
+          }
+        }
+
+        free(hit);
+      } else if (typeof_value_var[j] == REALSXP) {
+        double *output = ((double **) res)[j];
+        double *input = ((double **) value_var)[j];
+
+        char *hit = (char *) calloc(n_row_output, sizeof(char));
+
+        LOOP_OVER_ROWS {
+          if (ISNAN(input[i])) {
+            if (na_rm[j]) {
+              continue;
+            } else {
+              output[map_input_rows_to_output_rows[i]] = NA_REAL;
+              hit[map_input_rows_to_output_rows[i]] = 1;
+            }
+          } else if (hit[map_input_rows_to_output_rows[i]]) {
+            if (!ISNAN(output[map_input_rows_to_output_rows[i]])) {
+              output[map_input_rows_to_output_rows[i]] =
+                input[i] < output[map_input_rows_to_output_rows[i]] ?
+                input[i] : output[map_input_rows_to_output_rows[i]];
+            }
+          } else {
+            output[map_input_rows_to_output_rows[i]] = input[i];
+            hit[map_input_rows_to_output_rows[i]] = 1;
+          }
+        }
+
+        free(hit);
+      }
+
+      break;
+    }
+
+    case 6:  // max
+    {
+      if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
+        int *output = ((int **) res)[j];
+        int *input = ((int **) value_var)[j];
+
+        char *hit = (char *) calloc(n_row_output, sizeof(char));
+
+        LOOP_OVER_ROWS {
+          if ((typeof_value_var[j] == LGLSXP && input[i] == NA_LOGICAL) ||
+              (typeof_value_var[j] == INTSXP && input[i] == NA_INTEGER)) {
+            if (na_rm[j]) {
+              continue;
+            } else {
+              output[map_input_rows_to_output_rows[i]] = NA_INTEGER;
+              hit[map_input_rows_to_output_rows[i]] = 1;
+            }
+          } else if (hit[map_input_rows_to_output_rows[i]]) {
+            if (output[map_input_rows_to_output_rows[i]] != NA_INTEGER) {
+              output[map_input_rows_to_output_rows[i]] =
+                input[i] > output[map_input_rows_to_output_rows[i]] ?
+                input[i] : output[map_input_rows_to_output_rows[i]];
+            }
+          } else {
+            output[map_input_rows_to_output_rows[i]] = input[i];
+            hit[map_input_rows_to_output_rows[i]] = 1;
+          }
+        }
+
+        free(hit);
+      } else if (typeof_value_var[j] == REALSXP) {
+        double *output = ((double **) res)[j];
+        double *input = ((double **) value_var)[j];
+
+        char *hit = (char *) calloc(n_row_output, sizeof(char));
+
+        LOOP_OVER_ROWS {
+          if (ISNAN(input[i])) {
+            if (na_rm[j]) {
+              continue;
+            } else {
+              output[map_input_rows_to_output_rows[i]] = NA_REAL;
+              hit[map_input_rows_to_output_rows[i]] = 1;
+            }
+          } else if (hit[map_input_rows_to_output_rows[i]]) {
+            if (!ISNAN(output[map_input_rows_to_output_rows[i]])) {
+              output[map_input_rows_to_output_rows[i]] =
+                input[i] > output[map_input_rows_to_output_rows[i]] ?
+                input[i] : output[map_input_rows_to_output_rows[i]];
+            }
+          } else {
+            output[map_input_rows_to_output_rows[i]] = input[i];
+            hit[map_input_rows_to_output_rows[i]] = 1;
+          }
+        }
+
+        free(hit);
+      }
+
+      break;
+    }
     }
   }
 
@@ -313,7 +438,7 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
              SEXP map_output_cols_to_input_rows, SEXP res,
              SEXP map_output_cols_to_input_rows_lengths,
              SEXP map_input_rows_to_output_rows,
-             SEXP cols_split,
+             SEXP cols_split, SEXP n_row_output_SEXP,
              SEXP nthread_SEXP) {
 
   void **res_ptr = (void **) R_alloc(LENGTH(res), sizeof(void *));
@@ -346,7 +471,8 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
     .res = res_ptr,
     .map_output_cols_to_input_rows = map_output_cols_to_input_rows_ptr,
     .map_output_cols_to_input_rows_lengths = INTEGER(map_output_cols_to_input_rows_lengths),
-    .map_input_rows_to_output_rows = INTEGER(map_input_rows_to_output_rows)
+    .map_input_rows_to_output_rows = INTEGER(map_input_rows_to_output_rows),
+    .n_row_output = INTEGER(n_row_output_SEXP)[0]
   };
 
   int nthread = INTEGER(nthread_SEXP)[0];
