@@ -10,17 +10,16 @@
 #include <pthread.h>
 
 struct thread_data {
-  int agg;
-  void *value_var;
-  int typeof_value_var;
-  int na_rm;
+  int *agg;
+  void **value_var;
+  int *typeof_value_var;
+  int *na_rm;
   int *cols_split;
   int length_cols_split;
   void **res;
-  int *col_order;
-  int *col_grp_starts;
-  int *cols_res;
-  int *row_ranks;
+  int **map_output_cols_to_input_rows;
+  int *map_output_cols_to_input_rows_lengths;
+  int *map_input_rows_to_output_rows;
 };
 
 
@@ -117,228 +116,237 @@ int uniqueN_char_cmp(const void *x, const void *y) {
   }
 }
 
-#define CAST_START                                             \
-  for (int jj = 0; jj < length_cols_split; jj++) {             \
-    int j = cols_split[jj];                                    \
-    if (cols_res[j] == NA_INTEGER) continue;                   \
-                                                               \
-    void *col = res[cols_res[j]];                              \
-                                                               \
-    for (int ii = col_grp_starts[j];                           \
-         ii < col_grp_starts[j + 1];                           \
-         ii++) {                                               \
-      int i = col_order[ii];                                   \
 
-#define CAST_END                                               \
-    }                                                          \
-  }
+#define LOOP_OVER_ROWS                                         \
+  for (int ii = 0, i = map_output_cols_to_input_rows[j][0];    \
+    ii < map_output_cols_to_input_rows_lengths[j];             \
+    ii++, i = map_output_cols_to_input_rows[j][ii])                                                      \
+
 
 void *lfdcast_core(void *td_void) {
   struct thread_data *td = (struct thread_data *) td_void;
-  int agg = td->agg;
-  void *value_var = td->value_var;
-  int typeof_value_var = td->typeof_value_var;
-  int na_rm = td->na_rm;
+  int *agg = td->agg;
+  void **value_var = td->value_var;
+  int *typeof_value_var = td->typeof_value_var;
+  int *na_rm = td->na_rm;
   int *cols_split = td->cols_split;
   int length_cols_split = td->length_cols_split;
   void **res = td->res;
-  int *col_order = td->col_order;
-  int *col_grp_starts = td->col_grp_starts;
-  int *cols_res = td->cols_res;
-  int *row_ranks = td->row_ranks;
+  int **map_output_cols_to_input_rows = td->map_output_cols_to_input_rows;
+  int *map_output_cols_to_input_rows_lengths = td->map_output_cols_to_input_rows_lengths;
+  int *map_input_rows_to_output_rows = td->map_input_rows_to_output_rows;
 
-  switch(agg) {
-  case 1: // count
-    CAST_START
-    ((int *) col)[row_ranks[i]]++;
-    CAST_END
+  for (int jj = 0; jj < length_cols_split; jj++) {
+    int j = cols_split[jj];
+
+    switch(agg[j]) {
+    case 1:  // count
+    {
+      int *output = ((int **) res)[j];
+
+      LOOP_OVER_ROWS {
+        output[map_input_rows_to_output_rows[i]]++;
+      }
+
       break;
-  case 2: // existence
-    CAST_START
-    ((int *) col)[row_ranks[i]] = TRUE;
-    CAST_END
+    }
+
+    case 2:  // existence
+    {
+      int *output = ((int **) res)[j];
+
+      LOOP_OVER_ROWS {
+        output[map_input_rows_to_output_rows[i]] = TRUE;
+      }
+
       break;
-  case 3: // sum
-    if (typeof_value_var == LGLSXP) {
-      CAST_START
-      if (((int *) col)[row_ranks[i]] == NA_INTEGER) {
-        continue;
-      } else if (((int *)value_var)[i] == NA_LOGICAL) {
-        if (na_rm) {
-          continue;
-        } else {
-          ((int *) col)[row_ranks[i]] = NA_INTEGER;
-        }
-      } else {
-        ((int *) col)[row_ranks[i]] += ((int *)value_var)[i];
-      }
-      CAST_END
-    } else if (typeof_value_var == INTSXP) {
-      CAST_START
-      if (((int *)value_var)[i] == NA_INTEGER) {
-        if (na_rm) {
-          continue;
-        } else {
-          ((double *) col)[row_ranks[i]] = NA_REAL;
-        }
-      } else {
-        ((double *) col)[row_ranks[i]] += ((int *)value_var)[i];
-      }
-      CAST_END
-    } else if (typeof_value_var == REALSXP) {
-      CAST_START
-      if (na_rm && ((double *)value_var)[i] == NA_REAL) {
-        continue;
-      } else {
-        ((double *) col)[row_ranks[i]] += ((double *)value_var)[i];
-      }
-      CAST_END
-    } /*else {
-      error("value.var must be numeric or logical if fun.aggregate == 'sum'");
-    }*/
-    break;
-  case 4: // uniqueN
-    if (typeof_value_var == LGLSXP || typeof_value_var == INTSXP) {
-      for (int jj = 0; jj < length_cols_split; jj++) {
-        int j = cols_split[jj];
-        if (cols_res[j] == NA_INTEGER) continue;
+    }
 
-        void *col = res[cols_res[j]];
+    case 3:  // sum
+    {
+      if (typeof_value_var[j] == LGLSXP) {
+        int *output = ((int **) res)[j];
+        int *input = ((int **) value_var)[j];
 
-        struct uniqueN_int_data *uniqueN_data =
-          (struct uniqueN_int_data *) malloc((col_grp_starts[j + 1] - col_grp_starts[j]) * sizeof(struct uniqueN_int_data));
-
-        for (int ii = col_grp_starts[j], cntr = 0;
-             ii < col_grp_starts[j + 1];
-             ii++, cntr++) {
-          int i = col_order[ii];
-          (uniqueN_data + cntr)->rank = row_ranks[i];
-          (uniqueN_data + cntr)->value = ((int *)value_var)[i];
-        }
-
-        qsort(uniqueN_data, col_grp_starts[j + 1] - col_grp_starts[j], sizeof(struct uniqueN_int_data), uniqueN_int_cmp);
-
-        ((int *) col)[(uniqueN_data)->rank] = 1;
-        for (int i = 1; i < col_grp_starts[j + 1] - col_grp_starts[j]; i ++) {
-          if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
-            if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
-              ((int *) col)[(uniqueN_data + i)->rank]++;
+        LOOP_OVER_ROWS {
+          if (output[map_input_rows_to_output_rows[i]] == NA_INTEGER) {
+            continue;
+          } else if (input[i] == NA_LOGICAL) {
+            if (na_rm[j]) {
+              continue;
+            } else {
+              output[map_input_rows_to_output_rows[i]] = NA_INTEGER;
             }
           } else {
-            ((int *) col)[(uniqueN_data + i)->rank] = 1;
+            output[map_input_rows_to_output_rows[i]] += input[i];
+          }
+        }
+      } else if (typeof_value_var[j] == INTSXP) {
+        double *output = ((double **) res)[j];
+        int *input = ((int **) value_var)[j];
+
+        LOOP_OVER_ROWS {
+          if (input[i] == NA_INTEGER) {
+            if (na_rm[j]) {
+              continue;
+            } else {
+              output[map_input_rows_to_output_rows[i]] = NA_REAL;
+            }
+          } else {
+            output[map_input_rows_to_output_rows[i]] += input[i];
+          }
+        }
+      } else if (typeof_value_var[j] == REALSXP) {
+        double *output = ((double **) res)[j];
+        double *input = ((double **) value_var)[j];
+
+        LOOP_OVER_ROWS {
+          if (na_rm[j] && input[i] == NA_REAL) {
+            continue;
+          } else {
+            output[map_input_rows_to_output_rows[i]] += input[i];
+          }
+        }
+      }
+
+      break;
+    }
+
+    case 4:  // uniqueN
+    {
+      if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
+        int *output = ((int **) res)[j];
+        int *input = ((int **) value_var)[j];
+
+        struct uniqueN_int_data *uniqueN_data =
+          (struct uniqueN_int_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_int_data));
+
+        LOOP_OVER_ROWS {
+          (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
+          (uniqueN_data + ii)->value = input[i];
+        }
+
+        qsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], sizeof(struct uniqueN_int_data), uniqueN_int_cmp);
+
+        output[(uniqueN_data)->rank] = 1;
+        for (int i = 1; i < map_output_cols_to_input_rows_lengths[j]; i ++) {
+          if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
+            if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
+              output[(uniqueN_data + i)->rank]++;
+            }
+          } else {
+            output[(uniqueN_data + i)->rank] = 1;
           }
         }
 
         free(uniqueN_data);
-      }
-    } else if (typeof_value_var == REALSXP) {
-      for (int jj = 0; jj < length_cols_split; jj++) {
-        int j = cols_split[jj];
-        if (cols_res[j] == NA_INTEGER) continue;
 
-        void *col = res[cols_res[j]];
+      } else if (typeof_value_var[j] == REALSXP) {
+        int *output = ((int **) res)[j];
+        double *input = ((double **) value_var)[j];
 
         struct uniqueN_double_data *uniqueN_data =
-          (struct uniqueN_double_data *) malloc((col_grp_starts[j + 1] - col_grp_starts[j]) * sizeof(struct uniqueN_double_data));
+          (struct uniqueN_double_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_double_data));
 
-        for (int ii = col_grp_starts[j], cntr = 0;
-             ii < col_grp_starts[j + 1];
-             ii++, cntr++) {
-          int i = col_order[ii];
-          (uniqueN_data + cntr)->rank = row_ranks[i];
-          (uniqueN_data + cntr)->value = ((double *)value_var)[i];
+        LOOP_OVER_ROWS {
+          (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
+          (uniqueN_data + ii)->value = input[i];
         }
 
-        qsort(uniqueN_data, col_grp_starts[j + 1] - col_grp_starts[j], sizeof(struct uniqueN_double_data), uniqueN_double_cmp);
+        qsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], sizeof(struct uniqueN_double_data), uniqueN_double_cmp);
 
-        ((int *) col)[(uniqueN_data)->rank] = 1;
-        for (int i = 1; i < col_grp_starts[j + 1] - col_grp_starts[j]; i ++) {
+        output[(uniqueN_data)->rank] = 1;
+        for (int i = 1; i < map_output_cols_to_input_rows_lengths[j]; i ++) {
           if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
             if ((ISNA((uniqueN_data + i)->value) != ISNA((uniqueN_data + i - 1)->value)) ||
                 (R_IsNaN((uniqueN_data + i)->value) != R_IsNaN((uniqueN_data + i - 1)->value)) ||
                 (!ISNAN((uniqueN_data + i)->value) && !ISNAN((uniqueN_data + i - 1)->value) && (uniqueN_data + i)->value != (uniqueN_data + i - 1)->value)) {
-              ((int *) col)[(uniqueN_data + i)->rank]++;
+              output[(uniqueN_data + i)->rank]++;
             }
           } else {
-            ((int *) col)[(uniqueN_data + i)->rank] = 1;
+            output[(uniqueN_data + i)->rank] = 1;
           }
         }
 
         free(uniqueN_data);
-      }
-    } else if (typeof_value_var == STRSXP) {
-      for (int jj = 0; jj < length_cols_split; jj++) {
-        int j = cols_split[jj];
-        if (cols_res[j] == NA_INTEGER) continue;
 
-        void *col = res[cols_res[j]];
+
+      } else if (typeof_value_var[j] == STRSXP) {
+        int *output = ((int **) res)[j];
+        intptr_t *input = ((intptr_t **) value_var)[j];
 
         struct uniqueN_char_data *uniqueN_data =
-          (struct uniqueN_char_data *) malloc((col_grp_starts[j + 1] - col_grp_starts[j]) * sizeof(struct uniqueN_char_data));
+          (struct uniqueN_char_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_char_data));
 
-        for (int ii = col_grp_starts[j], cntr = 0;
-             ii < col_grp_starts[j + 1];
-             ii++, cntr++) {
-          int i = col_order[ii];
-          (uniqueN_data + cntr)->rank = row_ranks[i];
-          (uniqueN_data + cntr)->value = (intptr_t) ((SEXP *)value_var)[i];
+        LOOP_OVER_ROWS {
+          (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
+          (uniqueN_data + ii)->value = input[i];
         }
 
-        qsort(uniqueN_data, col_grp_starts[j + 1] - col_grp_starts[j], sizeof(struct uniqueN_char_data), uniqueN_int_cmp);
+        qsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], sizeof(struct uniqueN_char_data), uniqueN_char_cmp);
 
-        ((int *) col)[(uniqueN_data)->rank] = 1;
-        for (int i = 1; i < col_grp_starts[j + 1] - col_grp_starts[j]; i ++) {
+        output[(uniqueN_data)->rank] = 1;
+        for (int i = 1; i < map_output_cols_to_input_rows_lengths[j]; i ++) {
           if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
             if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
-              ((int *) col)[(uniqueN_data + i)->rank]++;
+              output[(uniqueN_data + i)->rank]++;
             }
           } else {
-            ((int *) col)[(uniqueN_data + i)->rank] = 1;
+            output[(uniqueN_data + i)->rank] = 1;
           }
         }
 
         free(uniqueN_data);
       }
+
+      break;
     }
 
-    break;
+    }
   }
 
   return NULL;
 }
 
 
-SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm, SEXP cols_split,
-             SEXP res, SEXP col_order,
-             SEXP col_grp_starts, SEXP cols_res, SEXP row_ranks,
+SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
+             SEXP map_output_cols_to_input_rows, SEXP res,
+             SEXP map_output_cols_to_input_rows_lengths,
+             SEXP map_input_rows_to_output_rows,
+             SEXP cols_split,
              SEXP nthread_SEXP) {
 
   void **res_ptr = (void **) R_alloc(LENGTH(res), sizeof(void *));
-  if (TYPEOF(VECTOR_ELT(res, 0)) == LGLSXP ||
-      TYPEOF(VECTOR_ELT(res, 0)) == INTSXP) {
-    for (int i = 0; i < LENGTH(res); i++) {
-      ((int **) res_ptr)[i] = INTEGER(VECTOR_ELT(res, i));
-    }
-  } else if (TYPEOF(VECTOR_ELT(res, 0)) == REALSXP) {
-    for (int i = 0; i < LENGTH(res); i++) {
-      ((double **) res_ptr)[i] = REAL(VECTOR_ELT(res, i));
-    }
-  } else {
-    error("something went wrong");
+  for (int i = 0; i < LENGTH(res); i++) {
+    res_ptr[i] = DATAPTR(VECTOR_ELT(res, i));
+  }
+
+  void **value_var_ptr = (void **) R_alloc(LENGTH(value_var), sizeof(void *));
+  for (int i = 0; i < LENGTH(value_var); i++) {
+    value_var_ptr[i] = DATAPTR(VECTOR_ELT(value_var, i));
+  }
+
+  int *typeof_value_var = (int *) R_alloc(LENGTH(value_var), sizeof(int));
+  for (int i = 0; i < LENGTH(value_var); i++) {
+    typeof_value_var[i] = TYPEOF(VECTOR_ELT(value_var, i));
+  }
+
+  int **map_output_cols_to_input_rows_ptr = (int **) R_alloc(LENGTH(map_output_cols_to_input_rows), sizeof(int *));
+  for (int i = 0; i < LENGTH(map_output_cols_to_input_rows); i++) {
+    map_output_cols_to_input_rows_ptr[i] = INTEGER(VECTOR_ELT(map_output_cols_to_input_rows, i));
   }
 
   struct thread_data td_template = {
-    .agg = INTEGER(agg)[0],
-    .value_var = DATAPTR(value_var),
-    .typeof_value_var = TYPEOF(value_var),
-    .na_rm = LOGICAL(na_rm)[0],
+    .agg = INTEGER(agg),
+    .value_var = value_var_ptr,
+    .typeof_value_var = typeof_value_var,
+    .na_rm = LOGICAL(na_rm),
     .cols_split = NULL,
     .length_cols_split = 0,
     .res = res_ptr,
-    .col_order = INTEGER(col_order),
-    .col_grp_starts = INTEGER(col_grp_starts),
-    .cols_res = INTEGER(cols_res),
-    .row_ranks = INTEGER(row_ranks)
+    .map_output_cols_to_input_rows = map_output_cols_to_input_rows_ptr,
+    .map_output_cols_to_input_rows_lengths = INTEGER(map_output_cols_to_input_rows_lengths),
+    .map_input_rows_to_output_rows = INTEGER(map_input_rows_to_output_rows)
   };
 
   int nthread = INTEGER(nthread_SEXP)[0];
