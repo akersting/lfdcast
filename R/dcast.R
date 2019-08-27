@@ -127,7 +127,11 @@ dcast <- function(X, by, to, fun.aggregate, value.var, to.keep = NULL,
 
   res <- do.call(.Call, arg_list_for_core)
 
-  row_ranks_unique_pos <- which(!duplicated(map_input_rows_to_output_rows, nmax = n_row_output))
+  # row_ranks_unique_pos <- which(!duplicated(map_input_rows_to_output_rows, nmax = n_row_output))
+  row_ranks_unique_pos <- .Call("get_row_ranks_unique_pos",
+                                x_SEXP = map_input_rows_to_output_rows,
+                                res_SEXP = rep(NA_integer_, n_row_output),
+                                PACKAGE = "lfdcast")
   row_ranks_unique <- map_input_rows_to_output_rows[row_ranks_unique_pos]
   row_ranks_unique_pos_ordered <- row_ranks_unique_pos[order(row_ranks_unique)]
   id_cols <- X[row_ranks_unique_pos_ordered, by, drop = FALSE]

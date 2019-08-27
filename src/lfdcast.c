@@ -503,3 +503,14 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
 
   return res;
 }
+
+
+SEXP get_row_ranks_unique_pos(SEXP x_SEXP, SEXP res_SEXP) {
+  int *x = INTEGER(x_SEXP);
+  int *res = INTEGER(res_SEXP);
+
+  for (int i = 0; i < LENGTH(x_SEXP); i++) {
+    res[x[i]] = i + 1;
+  }
+
+  return res_SEXP;
