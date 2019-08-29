@@ -1,28 +1,56 @@
+#' @export
+make_cast_args <- function(to, fun.aggregate, value.var, fill = NULL,
+                           to.keep = NULL, subset = NULL, na.rm = FALSE,
+                           sep = "_") {
+  list(
+    to = to,
+    fun.aggregate = fun.aggregate,
+    value.var = value.var,
+    fill = if (is.null(fill)) {
+      vector("list", length(value.var))
+    } else if (length(fill) == 1L) {
+      as.list(rep(fill, length(value.var)))
+    } else {
+      fill
+    },
+    to.keep = to.keep,
+    subset = subset,
+    na.rm = if (length(na.rm) == 1L) rep(na.rm, length(value.var)),
+    sep = if (length(sep) == 1L) rep(sep, length(value.var))
+  )
+}
+
 #' @useDynLib lfdcast
 #' @export
-dcast <- function(X, by, to, fun.aggregate, value.var, to.keep = NULL,
-                  na.rm = FALSE, sep = "_", nthread = 2L) {
+dcast <- function(X, by, ..., nthread = 2L) {
 
   map_input_rows_to_output_rows <-
     data.table::frankv(X, cols = by, na.last = FALSE,
                        ties.method = "dense") - 1L  # 0-based
   n_row_output <- max(map_input_rows_to_output_rows) + 1L
 
-  if (!is.list(to)) {
-    to <- list(to)
-    fun.aggregate <- list(fun.aggregate)
-    value.var <- list(value.var)
-    na.rm <- list(na.rm)
-    to.keep <- list(to.keep)
-  }
+  args <- list(...)
 
   arg_list_for_core <- list()
 
-  for (i in seq_along(to)) {
-    to_cols <- to[[i]]
+  for (i in seq_along(args)) {
+    to <- args[[i]][["to"]]
+    fun.aggregate <- args[[i]][["fun.aggregate"]]
+    value.var <- args[[i]][["value.var"]]
+    fill <- args[[i]][["fill"]]
+    to.keep <- args[[i]][["to.keep"]]
+    subset <- args[[i]][["subset"]]
+    na.rm <- args[[i]][["na.rm"]]
+    sep <- args[[i]][["sep"]]
 
-    if (length(to_cols) > 0L) {
-      col_order <- data.table:::forderv(X, by = to_cols, retGrp = TRUE,
+    if (length(subset) > 0L) {
+      rows2keep <- eval(subset, X, enclos = parent.frame())
+    } else {
+      rows2keep <- rep(TRUE, nrow(X))
+    }
+
+    if (length(to) > 0L) {
+      col_order <- data.table:::forderv(X, by = to, retGrp = TRUE,
                                         sort = TRUE)
       col_grp_starts <- attr(col_order, "starts")
 
@@ -30,17 +58,16 @@ dcast <- function(X, by, to, fun.aggregate, value.var, to.keep = NULL,
       if (length(col_order) == 0L) col_order <- seq_len(nrow(X))
 
       X_first_row_of_col_grp <- data.table::setDT(
-        X[col_order[col_grp_starts], to_cols, drop = FALSE])
+        X[col_order[col_grp_starts], to, drop = FALSE])
 
       col_grp_starts <- c(col_grp_starts, nrow(X) + 1L)  # might be double (OK)
-      col_order <- col_order - 1L  # make it 0-based
 
-      if (!is.null(to.keep[[i]])) {
+      if (!is.null(to.keep)) {
         this_to.keep <-
           data.table:::merge.data.table(X_first_row_of_col_grp,
-                                        cbind(unique(to.keep[[i]]),
+                                        cbind(unique(to.keep),
                                               "__LFDCAST__KEEP__" = TRUE),
-                                        by = names(to.keep[[i]]),
+                                        by = names(to.keep),
                                         all.x = TRUE,
                                         sort = FALSE)[["__LFDCAST__KEEP__"]]
       } else {
@@ -49,46 +76,65 @@ dcast <- function(X, by, to, fun.aggregate, value.var, to.keep = NULL,
 
       map_output_cols_to_input_rows <-
         lapply(which(this_to.keep), function(s) {
-          col_order[seq(col_grp_starts[s], col_grp_starts[s + 1L] - 1L)]
+          res <- col_order[seq(col_grp_starts[s], col_grp_starts[s + 1L] - 1L)]
+          res[rows2keep[res]] - 1L
         })
       n_col_output <- length(map_output_cols_to_input_rows)
 
     } else {
-      map_output_cols_to_input_rows <- list(seq(0L, length.out = nrow(X)))
+      map_output_cols_to_input_rows <- list(which(rows2keep) - 1L)
       n_col_output <- 1L
       this_to.keep <- TRUE
     }
 
-    for (j in seq_along(fun.aggregate[[i]])) {
-      fun <- fun.aggregate[[i]][j]
-      vvar <- value.var[[i]][j]
-      if (fun %in% c("existence")) {
-        default <- FALSE
-      } else if (fun %in% c("count", "uniqueN") ||
-                 (fun == "sum" && is.logical(X[[vvar]])) ||
-                 (fun %in% c("min", "max") && (is.logical(X[[vvar]]) ||
-                                               is.integer(X[[vvar]])))) {
-        default <- 0L
-      } else if (fun %in% c() ||
-                 (fun == "sum" && is.numeric(X[[vvar]])) ||
-                 (fun %in% c("min", "max") && is.numeric(X[[vvar]]))) {
-        default <- 0
+    for (j in seq_along(fun.aggregate)) {
+      fun <- fun.aggregate[j]
+      vvar <- value.var[j]
+
+      if (!is.null(fill[[j]])) {
+        default <- fill[[j]]
       } else {
-        stop("invalid 'fun.aggregate - value.var' combination found")
+        value_var_bare <- unclass(X[[vvar]])
+        if (fun %in% c("existence")) {
+          default <- FALSE
+        } else if (fun %in% c("count", "uniqueN") ||
+                   (fun == "sum" && is.logical(value_var_bare))) {
+          default <- 0L
+        } else if (fun %in% c() ||
+                   (fun == "sum" && is.numeric(value_var_bare))) {
+          default <- 0
+        } else if (fun %in% c("min")) {
+          default <- Inf
+        } else if (fun %in% c("max")) {
+          default <- -Inf
+        } else {
+          stop("invalid 'fun.aggregate - value.var' combination found")
+        }
       }
-      res <- lapply(seq_len(sum(!is.na(this_to.keep))),
-                    function(i, x, times) rep.int(x, times),
-                    x = default, times = n_row_output)
 
-
-      if (length(to_cols) > 0L) {
-        res_names <- do.call(paste, c(unname(X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE]), sep = sep))
-        if (!is.null(names(fun.aggregate[[i]])))
-          res_names <- paste(names(fun.aggregate[[i]])[j], res_names, sep = sep)
-        if (!is.null(names(to)))
-          res_names <- paste(names(to)[i], res_names, sep = sep)
+      if (fun %in% c("min", "max")) {
+        attribs <- attributes(X[[vvar]])
       } else {
-        res_names <- names(fun.aggregate[[i]])[j]
+        attribs <- NULL
+      }
+
+      res <- lapply(seq_len(sum(!is.na(this_to.keep))),
+                    function(i, x, times, attribs) {
+                      col <- rep.int(x, times)
+                      attributes(col) <- attribs
+                      col
+                    },
+                    x = default, times = n_row_output, attribs = attribs)
+
+
+      if (length(to) > 0L) {
+        res_names <- do.call(paste, c(unname(X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE]), sep = sep[j]))
+        if (!is.null(names(fun.aggregate)))
+          res_names <- paste(names(fun.aggregate)[j], res_names, sep = sep[j])
+        if (!is.null(names(args)))
+          res_names <- paste(names(args)[i], res_names, sep = sep[j])
+      } else {
+        res_names <- names(fun.aggregate)[j]
       }
 
       names(res) <- res_names
@@ -101,7 +147,7 @@ dcast <- function(X, by, to, fun.aggregate, value.var, to.keep = NULL,
       arg_list_for_core <- c(
         agg = list(c(arg_list_for_core[["agg"]], rep(agg, length(res)))),
         value_var = list(c(arg_list_for_core[["value_var"]], lapply(seq_len(length(res)), function(i) value_var))),
-        na_rm = list(c(arg_list_for_core[["na_rm"]], rep(na.rm[[i]][j], length(res)))),
+        na_rm = list(c(arg_list_for_core[["na_rm"]], rep(na.rm[j], length(res)))),
         map_output_cols_to_input_rows = list(c(arg_list_for_core[["map_output_cols_to_input_rows"]], map_output_cols_to_input_rows)),
         res = list(c(arg_list_for_core[["res"]], res))
       )
