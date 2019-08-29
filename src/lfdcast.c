@@ -53,6 +53,23 @@ struct uniqueN_double_data {
   double value;
 };
 
+int uniqueN_double_cmp_no_NaN(const void *x, const void *y) {
+  struct uniqueN_double_data *xx = (struct uniqueN_double_data *) x;
+  struct uniqueN_double_data *yy = (struct uniqueN_double_data *) y;
+
+  if (xx->rank < yy->rank) {
+    return -1;
+  } else if (xx->rank > yy->rank) {
+    return 1;
+  } else if (xx->value < yy->value) {
+    return -1;
+  } else if (xx->value > yy->value) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
 int uniqueN_double_cmp(const void *x, const void *y) {
   struct uniqueN_double_data *xx = (struct uniqueN_double_data *) x;
   struct uniqueN_double_data *yy = (struct uniqueN_double_data *) y;
@@ -146,9 +163,89 @@ void *lfdcast_core(void *td_void) {
     {
       int *output = ((int **) res)[j];
 
-      LOOP_OVER_ROWS {
-        output[map_input_rows_to_output_rows[i]]++;
+      if (output[0] == 0) {
+        if (na_rm[j]) {
+          if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
+            int *input = ((int **) value_var)[j];
+            LOOP_OVER_ROWS {
+              if (input[i] != NA_INTEGER) {
+                output[map_input_rows_to_output_rows[i]]++;
+              }
+            }
+          } else if (typeof_value_var[j] == REALSXP) {
+            double *input = ((double **) value_var)[j];
+            LOOP_OVER_ROWS {
+              if (!ISNAN(input[i])) {
+                output[map_input_rows_to_output_rows[i]]++;
+              }
+            }
+          } else if (typeof_value_var[j] == STRSXP) {
+            SEXP *input = ((SEXP **) value_var)[j];
+            LOOP_OVER_ROWS {
+              if (input[i] != NA_STRING) {
+                output[map_input_rows_to_output_rows[i]]++;
+              }
+            }
+          }
+        } else {
+          LOOP_OVER_ROWS {
+            output[map_input_rows_to_output_rows[i]]++;
+          }
+        }
+      } else {
+        char *hit = (char *) calloc(n_row_output, sizeof(char));
+
+        if (na_rm[j]) {
+          if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
+            int *input = ((int **) value_var)[j];
+            LOOP_OVER_ROWS {
+              if (input[i] != NA_INTEGER) {
+                if (hit[map_input_rows_to_output_rows[i]]) {
+                  output[map_input_rows_to_output_rows[i]]++;
+                } else {
+                  output[map_input_rows_to_output_rows[i]] = 1;
+                  hit[map_input_rows_to_output_rows[i]] = 1;
+                }
+              }
+            }
+          } else if (typeof_value_var[j] == REALSXP) {
+            double *input = ((double **) value_var)[j];
+            LOOP_OVER_ROWS {
+              if (!ISNAN(input[i])) {
+                if (hit[map_input_rows_to_output_rows[i]]) {
+                  output[map_input_rows_to_output_rows[i]]++;
+                } else {
+                  output[map_input_rows_to_output_rows[i]] = 1;
+                  hit[map_input_rows_to_output_rows[i]] = 1;
+                }
+              }
+            }
+          } else if (typeof_value_var[j] == STRSXP) {
+            SEXP *input = ((SEXP **) value_var)[j];
+            LOOP_OVER_ROWS {
+              if (input[i] != NA_STRING) {
+                if (hit[map_input_rows_to_output_rows[i]]) {
+                  output[map_input_rows_to_output_rows[i]]++;
+                } else {
+                  output[map_input_rows_to_output_rows[i]] = 1;
+                  hit[map_input_rows_to_output_rows[i]] = 1;
+                }
+              }
+            }
+          }
+        } else {
+          LOOP_OVER_ROWS {
+            if (hit[map_input_rows_to_output_rows[i]]) {
+              output[map_input_rows_to_output_rows[i]]++;
+            } else {
+              output[map_input_rows_to_output_rows[i]] = 1;
+              hit[map_input_rows_to_output_rows[i]] = 1;
+            }
+          }
+        }
+        free(hit);
       }
+
 
       break;
     }
@@ -157,8 +254,33 @@ void *lfdcast_core(void *td_void) {
     {
       int *output = ((int **) res)[j];
 
-      LOOP_OVER_ROWS {
-        output[map_input_rows_to_output_rows[i]] = TRUE;
+      if (na_rm[j]) {
+        if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
+          int *input = ((int **) value_var)[j];
+          LOOP_OVER_ROWS {
+            if (input[i] != NA_INTEGER) {
+              output[map_input_rows_to_output_rows[i]] = TRUE;
+            }
+          }
+        } else if (typeof_value_var[j] == REALSXP) {
+          double *input = ((double **) value_var)[j];
+          LOOP_OVER_ROWS {
+            if (!ISNAN(input[i])) {
+              output[map_input_rows_to_output_rows[i]] = TRUE;
+            }
+          }
+        } else if (typeof_value_var[j] == STRSXP) {
+          SEXP *input = ((SEXP **) value_var)[j];
+          LOOP_OVER_ROWS {
+            if (input[i] != NA_STRING) {
+              output[map_input_rows_to_output_rows[i]] = TRUE;
+            }
+          }
+        }
+      } else {
+        LOOP_OVER_ROWS {
+          output[map_input_rows_to_output_rows[i]] = TRUE;
+        }
       }
 
       break;
@@ -170,44 +292,160 @@ void *lfdcast_core(void *td_void) {
         int *output = ((int **) res)[j];
         int *input = ((int **) value_var)[j];
 
-        LOOP_OVER_ROWS {
-          if (output[map_input_rows_to_output_rows[i]] == NA_INTEGER) {
-            continue;
-          } else if (input[i] == NA_LOGICAL) {
-            if (na_rm[j]) {
-              continue;
-            } else {
-              output[map_input_rows_to_output_rows[i]] = NA_INTEGER;
+        if (output[0] == 0) {
+          if (na_rm[j]) {
+            LOOP_OVER_ROWS {
+              if (input[i] != NA_LOGICAL) {
+                output[map_input_rows_to_output_rows[i]] += input[i];
+              }
             }
           } else {
-            output[map_input_rows_to_output_rows[i]] += input[i];
+            LOOP_OVER_ROWS {
+              if (output[map_input_rows_to_output_rows[i]] != NA_INTEGER) {
+                if (input[i] != NA_LOGICAL) {
+                  output[map_input_rows_to_output_rows[i]] += input[i];
+                } else {
+                  output[map_input_rows_to_output_rows[i]] = NA_INTEGER;
+                }
+              }
+            }
           }
+        } else {
+          char *hit = (char *) calloc(n_row_output, sizeof(char));
+
+          if (na_rm[j]) {
+            LOOP_OVER_ROWS {
+              if (input[i] != NA_LOGICAL) {
+                if (hit[map_input_rows_to_output_rows[i]]) {
+                  output[map_input_rows_to_output_rows[i]] += input[i];
+                } else {
+                  output[map_input_rows_to_output_rows[i]] = input[i];
+                  hit[map_input_rows_to_output_rows[i]] = 1;
+                }
+              }
+            }
+          } else {
+            LOOP_OVER_ROWS {
+              if (hit[map_input_rows_to_output_rows[i]]) {
+                if (output[map_input_rows_to_output_rows[i]] != NA_INTEGER) {
+                  if (input[i] != NA_LOGICAL) {
+                    output[map_input_rows_to_output_rows[i]] += input[i];
+                  } else {
+                    output[map_input_rows_to_output_rows[i]] = NA_INTEGER;
+                  }
+                }
+              } else {
+                output[map_input_rows_to_output_rows[i]] = input[i];
+                hit[map_input_rows_to_output_rows[i]] = 1;
+              }
+            }
+          }
+
+          free(hit);
         }
+
       } else if (typeof_value_var[j] == INTSXP) {
         double *output = ((double **) res)[j];
         int *input = ((int **) value_var)[j];
 
-        LOOP_OVER_ROWS {
-          if (input[i] == NA_INTEGER) {
-            if (na_rm[j]) {
-              continue;
-            } else {
-              output[map_input_rows_to_output_rows[i]] = NA_REAL;
+        if (output[0] == 0) {
+          if (na_rm[j]) {
+            LOOP_OVER_ROWS {
+              if (input[i] != NA_INTEGER) {
+                output[map_input_rows_to_output_rows[i]] += input[i];
+              }
             }
           } else {
-            output[map_input_rows_to_output_rows[i]] += input[i];
+            LOOP_OVER_ROWS {
+              if (!ISNAN(output[map_input_rows_to_output_rows[i]])) {
+                if (input[i] != NA_INTEGER) {
+                  output[map_input_rows_to_output_rows[i]] += input[i];
+                } else {
+                  output[map_input_rows_to_output_rows[i]] = NA_REAL;
+                }
+              }
+            }
           }
+        } else {
+          char *hit = (char *) calloc(n_row_output, sizeof(char));
+
+          if (na_rm[j]) {
+            LOOP_OVER_ROWS {
+              if (input[i] != NA_INTEGER) {
+                if (hit[map_input_rows_to_output_rows[i]]) {
+                  output[map_input_rows_to_output_rows[i]] += input[i];
+                } else {
+                  output[map_input_rows_to_output_rows[i]] = input[i];
+                  hit[map_input_rows_to_output_rows[i]] = 1;
+                }
+              }
+            }
+          } else {
+            LOOP_OVER_ROWS {
+              if (hit[map_input_rows_to_output_rows[i]]) {
+                if (!ISNAN(output[map_input_rows_to_output_rows[i]])) {
+                  if (input[i] != NA_INTEGER) {
+                    output[map_input_rows_to_output_rows[i]] += input[i];
+                  } else {
+                    output[map_input_rows_to_output_rows[i]] = NA_REAL;
+                  }
+                }
+              } else {
+                if (input[i] != NA_INTEGER) {
+                  output[map_input_rows_to_output_rows[i]] = input[i];
+                } else {
+                  output[map_input_rows_to_output_rows[i]] = NA_REAL;
+                }
+                hit[map_input_rows_to_output_rows[i]] = 1;
+              }
+            }
+          }
+
+          free(hit);
         }
+
       } else if (typeof_value_var[j] == REALSXP) {
         double *output = ((double **) res)[j];
         double *input = ((double **) value_var)[j];
 
-        LOOP_OVER_ROWS {
-          if (na_rm[j] && input[i] == NA_REAL) {
-            continue;
+        if (output[0] == 0) {
+          if (na_rm[j]) {
+            LOOP_OVER_ROWS {
+              if (!ISNAN(input[i])) {
+                output[map_input_rows_to_output_rows[i]] += input[i];
+              }
+            }
           } else {
-            output[map_input_rows_to_output_rows[i]] += input[i];
+            LOOP_OVER_ROWS {
+              output[map_input_rows_to_output_rows[i]] += input[i];
+            }
           }
+        } else {
+          char *hit = (char *) calloc(n_row_output, sizeof(char));
+
+          if (na_rm[j]) {
+            LOOP_OVER_ROWS {
+              if (!ISNAN(input[i])) {
+                if (hit[map_input_rows_to_output_rows[i]]) {
+                  output[map_input_rows_to_output_rows[i]] += input[i];
+                } else {
+                  output[map_input_rows_to_output_rows[i]] = input[i];
+                  hit[map_input_rows_to_output_rows[i]] = 1;
+                }
+              }
+            }
+          } else {
+            LOOP_OVER_ROWS {
+              if (hit[map_input_rows_to_output_rows[i]]) {
+                output[map_input_rows_to_output_rows[i]] += input[i];
+              } else {
+                output[map_input_rows_to_output_rows[i]] = input[i];
+                hit[map_input_rows_to_output_rows[i]] = 1;
+              }
+            }
+          }
+
+          free(hit);
         }
       }
 
@@ -223,21 +461,35 @@ void *lfdcast_core(void *td_void) {
         struct uniqueN_int_data *uniqueN_data =
           (struct uniqueN_int_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_int_data));
 
-        LOOP_OVER_ROWS {
-          (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
-          (uniqueN_data + ii)->value = input[i];
+        int uniqueN_data_length = 0;
+        if (na_rm[j]) {
+          LOOP_OVER_ROWS {
+            if (input[i] != NA_INTEGER) {
+              (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
+              (uniqueN_data + uniqueN_data_length)->value = input[i];
+              uniqueN_data_length++;
+            }
+          }
+        } else {
+          LOOP_OVER_ROWS {
+            (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
+            (uniqueN_data + ii)->value = input[i];
+          }
+          uniqueN_data_length = map_output_cols_to_input_rows_lengths[j];
         }
 
-        qsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], sizeof(struct uniqueN_int_data), uniqueN_int_cmp);
+        if (uniqueN_data_length > 0) {
+          qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_int_data), uniqueN_int_cmp);
 
-        output[(uniqueN_data)->rank] = 1;
-        for (int i = 1; i < map_output_cols_to_input_rows_lengths[j]; i ++) {
-          if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
-            if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
-              output[(uniqueN_data + i)->rank]++;
+          output[(uniqueN_data)->rank] = 1;
+          for (int i = 1; i < uniqueN_data_length; i ++) {
+            if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
+              if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
+                output[(uniqueN_data + i)->rank]++;
+              }
+            } else {
+              output[(uniqueN_data + i)->rank] = 1;
             }
-          } else {
-            output[(uniqueN_data + i)->rank] = 1;
           }
         }
 
@@ -250,23 +502,51 @@ void *lfdcast_core(void *td_void) {
         struct uniqueN_double_data *uniqueN_data =
           (struct uniqueN_double_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_double_data));
 
-        LOOP_OVER_ROWS {
-          (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
-          (uniqueN_data + ii)->value = input[i];
-        }
+        if (na_rm[j]) {
+          int uniqueN_data_length = 0;
 
-        qsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], sizeof(struct uniqueN_double_data), uniqueN_double_cmp);
-
-        output[(uniqueN_data)->rank] = 1;
-        for (int i = 1; i < map_output_cols_to_input_rows_lengths[j]; i ++) {
-          if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
-            if ((ISNA((uniqueN_data + i)->value) != ISNA((uniqueN_data + i - 1)->value)) ||
-                (R_IsNaN((uniqueN_data + i)->value) != R_IsNaN((uniqueN_data + i - 1)->value)) ||
-                (!ISNAN((uniqueN_data + i)->value) && !ISNAN((uniqueN_data + i - 1)->value) && (uniqueN_data + i)->value != (uniqueN_data + i - 1)->value)) {
-              output[(uniqueN_data + i)->rank]++;
+          LOOP_OVER_ROWS {
+            if (!ISNAN(input[i])) {
+              (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
+              (uniqueN_data + uniqueN_data_length)->value = input[i];
+              uniqueN_data_length++;
             }
-          } else {
-            output[(uniqueN_data + i)->rank] = 1;
+          }
+
+          if (uniqueN_data_length > 0) {
+            qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_double_data), uniqueN_double_cmp_no_NaN);
+
+            output[(uniqueN_data)->rank] = 1;
+            for (int i = 1; i < uniqueN_data_length; i ++) {
+              if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
+                if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
+                  output[(uniqueN_data + i)->rank]++;
+                }
+              } else {
+                output[(uniqueN_data + i)->rank] = 1;
+              }
+            }
+          }
+
+        } else {
+          LOOP_OVER_ROWS {
+            (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
+            (uniqueN_data + ii)->value = input[i];
+          }
+
+          qsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], sizeof(struct uniqueN_double_data), uniqueN_double_cmp);
+
+          output[(uniqueN_data)->rank] = 1;
+          for (int i = 1; i < map_output_cols_to_input_rows_lengths[j]; i ++) {
+            if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
+              if ((ISNA((uniqueN_data + i)->value) != ISNA((uniqueN_data + i - 1)->value)) ||
+                  (R_IsNaN((uniqueN_data + i)->value) != R_IsNaN((uniqueN_data + i - 1)->value)) ||
+                  (!ISNAN((uniqueN_data + i)->value) && !ISNAN((uniqueN_data + i - 1)->value) && (uniqueN_data + i)->value != (uniqueN_data + i - 1)->value)) {
+                output[(uniqueN_data + i)->rank]++;
+              }
+            } else {
+              output[(uniqueN_data + i)->rank] = 1;
+            }
           }
         }
 
@@ -280,21 +560,35 @@ void *lfdcast_core(void *td_void) {
         struct uniqueN_char_data *uniqueN_data =
           (struct uniqueN_char_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_char_data));
 
-        LOOP_OVER_ROWS {
-          (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
-          (uniqueN_data + ii)->value = input[i];
+        int uniqueN_data_length = 0;
+        if (na_rm[j]) {
+          LOOP_OVER_ROWS {
+            if (input[i] != (intptr_t) NA_STRING) {
+              (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
+              (uniqueN_data + uniqueN_data_length)->value = input[i];
+              uniqueN_data_length++;
+            }
+          }
+        } else {
+          LOOP_OVER_ROWS {
+            (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
+            (uniqueN_data + ii)->value = input[i];
+          }
+          uniqueN_data_length = map_output_cols_to_input_rows_lengths[j];
         }
 
-        qsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], sizeof(struct uniqueN_char_data), uniqueN_char_cmp);
+        if (uniqueN_data_length > 0) {
+          qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_char_data), uniqueN_char_cmp);
 
-        output[(uniqueN_data)->rank] = 1;
-        for (int i = 1; i < map_output_cols_to_input_rows_lengths[j]; i ++) {
-          if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
-            if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
-              output[(uniqueN_data + i)->rank]++;
+          output[(uniqueN_data)->rank] = 1;
+          for (int i = 1; i < uniqueN_data_length; i ++) {
+            if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
+              if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
+                output[(uniqueN_data + i)->rank]++;
+              }
+            } else {
+              output[(uniqueN_data + i)->rank] = 1;
             }
-          } else {
-            output[(uniqueN_data + i)->rank] = 1;
           }
         }
 
@@ -312,24 +606,30 @@ void *lfdcast_core(void *td_void) {
 
         char *hit = (char *) calloc(n_row_output, sizeof(char));
 
-        LOOP_OVER_ROWS {
-          if ((typeof_value_var[j] == LGLSXP && input[i] == NA_LOGICAL) ||
-              (typeof_value_var[j] == INTSXP && input[i] == NA_INTEGER)) {
-            if (na_rm[j]) {
-              continue;
+        if (na_rm[j]) {
+          LOOP_OVER_ROWS {
+            // this exploits that NA_LOGICAL := NA_INTEGER
+            if (input[i] == NA_INTEGER) continue;
+            if (hit[map_input_rows_to_output_rows[i]]) {
+              if (input[i] < output[map_input_rows_to_output_rows[i]]) {
+                output[map_input_rows_to_output_rows[i]] = input[i];
+              }
             } else {
-              output[map_input_rows_to_output_rows[i]] = NA_INTEGER;
+              output[map_input_rows_to_output_rows[i]] = input[i];
               hit[map_input_rows_to_output_rows[i]] = 1;
             }
-          } else if (hit[map_input_rows_to_output_rows[i]]) {
-            if (output[map_input_rows_to_output_rows[i]] != NA_INTEGER) {
-              output[map_input_rows_to_output_rows[i]] =
-                input[i] < output[map_input_rows_to_output_rows[i]] ?
-                input[i] : output[map_input_rows_to_output_rows[i]];
+          }
+        } else {
+          LOOP_OVER_ROWS {
+            if (hit[map_input_rows_to_output_rows[i]]) {
+              // this exploits that NA_INTEGER := INT_MIN
+              if (input[i] < output[map_input_rows_to_output_rows[i]]) {
+                output[map_input_rows_to_output_rows[i]] = input[i];
+              }
+            } else {
+              output[map_input_rows_to_output_rows[i]] = input[i];
+              hit[map_input_rows_to_output_rows[i]] = 1;
             }
-          } else {
-            output[map_input_rows_to_output_rows[i]] = input[i];
-            hit[map_input_rows_to_output_rows[i]] = 1;
           }
         }
 
@@ -349,10 +649,9 @@ void *lfdcast_core(void *td_void) {
               hit[map_input_rows_to_output_rows[i]] = 1;
             }
           } else if (hit[map_input_rows_to_output_rows[i]]) {
-            if (!ISNAN(output[map_input_rows_to_output_rows[i]])) {
-              output[map_input_rows_to_output_rows[i]] =
-                input[i] < output[map_input_rows_to_output_rows[i]] ?
-                input[i] : output[map_input_rows_to_output_rows[i]];
+            if (!ISNAN(output[map_input_rows_to_output_rows[i]]) &&
+                input[i] < output[map_input_rows_to_output_rows[i]]) {
+              output[map_input_rows_to_output_rows[i]] = input[i];
             }
           } else {
             output[map_input_rows_to_output_rows[i]] = input[i];
@@ -374,24 +673,31 @@ void *lfdcast_core(void *td_void) {
 
         char *hit = (char *) calloc(n_row_output, sizeof(char));
 
-        LOOP_OVER_ROWS {
-          if ((typeof_value_var[j] == LGLSXP && input[i] == NA_LOGICAL) ||
-              (typeof_value_var[j] == INTSXP && input[i] == NA_INTEGER)) {
-            if (na_rm[j]) {
-              continue;
+        if (na_rm[j]) {
+          LOOP_OVER_ROWS {
+            // this exploits that NA_LOGICAL := NA_INTEGER
+            if (input[i] == NA_INTEGER) continue;
+            if (hit[map_input_rows_to_output_rows[i]]) {
+              if (input[i] > output[map_input_rows_to_output_rows[i]]) {
+                output[map_input_rows_to_output_rows[i]] = input[i];
+              }
             } else {
-              output[map_input_rows_to_output_rows[i]] = NA_INTEGER;
+              output[map_input_rows_to_output_rows[i]] = input[i];
               hit[map_input_rows_to_output_rows[i]] = 1;
             }
-          } else if (hit[map_input_rows_to_output_rows[i]]) {
-            if (output[map_input_rows_to_output_rows[i]] != NA_INTEGER) {
-              output[map_input_rows_to_output_rows[i]] =
-                input[i] > output[map_input_rows_to_output_rows[i]] ?
-                input[i] : output[map_input_rows_to_output_rows[i]];
+          }
+        } else {
+          LOOP_OVER_ROWS {
+            if (hit[map_input_rows_to_output_rows[i]]) {
+              if (input[i] == NA_INTEGER ||
+                  (output[map_input_rows_to_output_rows[i]] != NA_INTEGER &&
+                  input[i] > output[map_input_rows_to_output_rows[i]])) {
+                output[map_input_rows_to_output_rows[i]] = input[i];
+              }
+            } else {
+              output[map_input_rows_to_output_rows[i]] = input[i];
+              hit[map_input_rows_to_output_rows[i]] = 1;
             }
-          } else {
-            output[map_input_rows_to_output_rows[i]] = input[i];
-            hit[map_input_rows_to_output_rows[i]] = 1;
           }
         }
 
@@ -411,10 +717,9 @@ void *lfdcast_core(void *td_void) {
               hit[map_input_rows_to_output_rows[i]] = 1;
             }
           } else if (hit[map_input_rows_to_output_rows[i]]) {
-            if (!ISNAN(output[map_input_rows_to_output_rows[i]])) {
-              output[map_input_rows_to_output_rows[i]] =
-                input[i] > output[map_input_rows_to_output_rows[i]] ?
-                input[i] : output[map_input_rows_to_output_rows[i]];
+            if (!ISNAN(output[map_input_rows_to_output_rows[i]]) &&
+                input[i] > output[map_input_rows_to_output_rows[i]]) {
+              output[map_input_rows_to_output_rows[i]] = input[i];
             }
           } else {
             output[map_input_rows_to_output_rows[i]] = input[i];
@@ -514,3 +819,4 @@ SEXP get_row_ranks_unique_pos(SEXP x_SEXP, SEXP res_SEXP) {
   }
 
   return res_SEXP;
+}
