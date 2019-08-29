@@ -13,6 +13,7 @@ struct thread_data {
   int *agg;
   void **value_var;
   int *typeof_value_var;
+  int *typeof_res;
   int *na_rm;
   int *cols_split;
   int length_cols_split;
@@ -146,6 +147,7 @@ void *lfdcast_core(void *td_void) {
   int *agg = td->agg;
   void **value_var = td->value_var;
   int *typeof_value_var = td->typeof_value_var;
+  int *typeof_res = td->typeof_res;
   int *na_rm = td->na_rm;
   int *cols_split = td->cols_split;
   int length_cols_split = td->length_cols_split;
@@ -536,7 +538,10 @@ void *lfdcast_core(void *td_void) {
 
           qsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], sizeof(struct uniqueN_double_data), uniqueN_double_cmp);
 
-          output[(uniqueN_data)->rank] = 1;
+          if (map_output_cols_to_input_rows_lengths[j] > 0) {
+            output[(uniqueN_data)->rank] = 1;
+          }
+
           for (int i = 1; i < map_output_cols_to_input_rows_lengths[j]; i ++) {
             if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
               if ((ISNA((uniqueN_data + i)->value) != ISNA((uniqueN_data + i - 1)->value)) ||
@@ -600,7 +605,8 @@ void *lfdcast_core(void *td_void) {
 
     case 5:  // min
     {
-      if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
+      if ((typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) &&
+          typeof_res[j] == INTSXP) {
         int *output = ((int **) res)[j];
         int *input = ((int **) value_var)[j];
 
@@ -628,6 +634,49 @@ void *lfdcast_core(void *td_void) {
               }
             } else {
               output[map_input_rows_to_output_rows[i]] = input[i];
+              hit[map_input_rows_to_output_rows[i]] = 1;
+            }
+          }
+        }
+
+        free(hit);
+      } else if ((typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) &&
+                 typeof_res[j] == REALSXP) {
+        double *output = ((double **) res)[j];
+        int *input = ((int **) value_var)[j];
+
+        char *hit = (char *) calloc(n_row_output, sizeof(char));
+
+        if (na_rm[j]) {
+          LOOP_OVER_ROWS {
+            // this exploits that NA_LOGICAL := NA_INTEGER
+            if (input[i] == NA_INTEGER) continue;
+            if (hit[map_input_rows_to_output_rows[i]]) {
+              if (input[i] < output[map_input_rows_to_output_rows[i]]) {
+                output[map_input_rows_to_output_rows[i]] = input[i];
+              }
+            } else {
+              output[map_input_rows_to_output_rows[i]] = input[i];
+              hit[map_input_rows_to_output_rows[i]] = 1;
+            }
+          }
+        } else {
+          LOOP_OVER_ROWS {
+            if (hit[map_input_rows_to_output_rows[i]]) {
+              if (input[i] != NA_INTEGER) {
+                if(!ISNAN(output[map_input_rows_to_output_rows[i]]) &&
+                   input[i] < output[map_input_rows_to_output_rows[i]]) {
+                  output[map_input_rows_to_output_rows[i]] = input[i];
+                }
+              } else {
+                output[map_input_rows_to_output_rows[i]] = NA_REAL;
+              }
+            } else {
+              if (input[i] != NA_INTEGER) {
+                output[map_input_rows_to_output_rows[i]] = input[i];
+              } else {
+                output[map_input_rows_to_output_rows[i]] = NA_REAL;
+              }
               hit[map_input_rows_to_output_rows[i]] = 1;
             }
           }
@@ -667,7 +716,8 @@ void *lfdcast_core(void *td_void) {
 
     case 6:  // max
     {
-      if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
+      if ((typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) &&
+          typeof_res[j] == INTSXP) {
         int *output = ((int **) res)[j];
         int *input = ((int **) value_var)[j];
 
@@ -696,6 +746,49 @@ void *lfdcast_core(void *td_void) {
               }
             } else {
               output[map_input_rows_to_output_rows[i]] = input[i];
+              hit[map_input_rows_to_output_rows[i]] = 1;
+            }
+          }
+        }
+
+        free(hit);
+      } else if ((typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) &&
+        typeof_res[j] == REALSXP) {
+        double *output = ((double **) res)[j];
+        int *input = ((int **) value_var)[j];
+
+        char *hit = (char *) calloc(n_row_output, sizeof(char));
+
+        if (na_rm[j]) {
+          LOOP_OVER_ROWS {
+            // this exploits that NA_LOGICAL := NA_INTEGER
+            if (input[i] == NA_INTEGER) continue;
+            if (hit[map_input_rows_to_output_rows[i]]) {
+              if (input[i] > output[map_input_rows_to_output_rows[i]]) {
+                output[map_input_rows_to_output_rows[i]] = input[i];
+              }
+            } else {
+              output[map_input_rows_to_output_rows[i]] = input[i];
+              hit[map_input_rows_to_output_rows[i]] = 1;
+            }
+          }
+        } else {
+          LOOP_OVER_ROWS {
+            if (hit[map_input_rows_to_output_rows[i]]) {
+              if (input[i] != NA_INTEGER) {
+                if(!ISNAN(output[map_input_rows_to_output_rows[i]]) &&
+                   input[i] > output[map_input_rows_to_output_rows[i]]) {
+                  output[map_input_rows_to_output_rows[i]] = input[i];
+                }
+              } else {
+                output[map_input_rows_to_output_rows[i]] = NA_REAL;
+              }
+            } else {
+              if (input[i] != NA_INTEGER) {
+                output[map_input_rows_to_output_rows[i]] = input[i];
+              } else {
+                output[map_input_rows_to_output_rows[i]] = NA_REAL;
+              }
               hit[map_input_rows_to_output_rows[i]] = 1;
             }
           }
@@ -761,6 +854,11 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
     typeof_value_var[i] = TYPEOF(VECTOR_ELT(value_var, i));
   }
 
+  int *typeof_res = (int *) R_alloc(LENGTH(res), sizeof(int));
+  for (int i = 0; i < LENGTH(res); i++) {
+    typeof_res[i] = TYPEOF(VECTOR_ELT(res, i));
+  }
+
   int **map_output_cols_to_input_rows_ptr = (int **) R_alloc(LENGTH(map_output_cols_to_input_rows), sizeof(int *));
   for (int i = 0; i < LENGTH(map_output_cols_to_input_rows); i++) {
     map_output_cols_to_input_rows_ptr[i] = INTEGER(VECTOR_ELT(map_output_cols_to_input_rows, i));
@@ -770,6 +868,7 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
     .agg = INTEGER(agg),
     .value_var = value_var_ptr,
     .typeof_value_var = typeof_value_var,
+    .typeof_res = typeof_res,
     .na_rm = LOGICAL(na_rm),
     .cols_split = NULL,
     .length_cols_split = 0,
