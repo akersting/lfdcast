@@ -15,8 +15,8 @@ make_cast_args <- function(to, fun.aggregate, value.var, fill = NULL,
     },
     to.keep = to.keep,
     subset = subset,
-    na.rm = if (length(na.rm) == 1L) rep(na.rm, length(value.var)),
-    sep = if (length(sep) == 1L) rep(sep, length(value.var))
+    na.rm = if (length(na.rm) == 1L) rep(na.rm, length(value.var)) else na.rm,
+    sep = if (length(sep) == 1L) rep(sep, length(value.var)) else sep
   )
 }
 
