@@ -7,7 +7,98 @@
 #include "Rinternals.h"
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <pthread.h>
+
+#define n_pass_rank 4
+#define n_pass_value 8
+#define shift 8
+#define n_bucket 256
+#define mask 0xFF
+
+struct uniqueN_data {
+  uint32_t rank;
+  uint64_t value;
+};
+
+void rsort(struct uniqueN_data *x, int n, int hist_rank[][n_bucket],
+           int hist_value[][n_bucket]) {
+
+  struct uniqueN_data *s = (struct uniqueN_data *) malloc(n * sizeof(struct uniqueN_data));
+
+  int not_skip_rank[n_pass_rank];
+  for (int j = 0; j < n_pass_rank; j++) {
+    not_skip_rank[j] = -1;
+    int cumsum = 0;
+    for (int i = 0; i < n_bucket; i++) {
+      if (hist_rank[j][i] != 0) not_skip_rank[j]++;
+      cumsum += hist_rank[j][i];
+      hist_rank[j][i] = cumsum - hist_rank[j][i];
+    }
+  }
+
+  int not_skip_value[n_pass_value];
+  for (int j = 0; j < n_pass_value; j++) {
+    not_skip_value[j] = -1;
+    int cumsum = 0;
+    for (int i = 0; i < n_bucket; i++) {
+      if (hist_value[j][i] != 0) not_skip_value[j]++;
+      cumsum += hist_value[j][i];
+      hist_value[j][i] = cumsum - hist_value[j][i];
+    }
+  }
+
+  int pass = 0;
+  for (int j = 0; j < n_pass_value; j++) {
+    if (!not_skip_value[j]) continue;
+
+    for (int i = 0; i < n; i++) {
+      unsigned int pos = (x + i)->value >> j * shift & mask;
+      s[hist_value[j][pos]++] = x[i];
+    }
+
+    struct uniqueN_data *tmp = s;
+    s = x;
+    x = tmp;
+
+    pass++;
+  }
+
+  for (int j = 0; j < n_pass_rank; j++) {
+    if (!not_skip_rank[j]) continue;
+
+    for (int i = 0; i < n; i++) {
+      unsigned int pos = (x + i)->rank >> j * shift & mask;
+      s[hist_rank[j][pos]++] = x[i];
+    }
+
+    struct uniqueN_data *tmp = s;
+    s = x;
+    x = tmp;
+
+    pass++;
+  }
+
+  if (pass % 2 == 0) {
+    free(s);
+  } else {
+    memcpy(s, x, n * sizeof(struct uniqueN_data));
+    free(x);
+  }
+}
+
+void isort(struct uniqueN_data *x, int n) {
+  for (int i = 1; i < n; i++) {
+    struct uniqueN_data tmp = x[i];
+    int j = i;
+    while(j > 0 &&
+          ((tmp.rank < (x + j - 1)->rank) || (tmp.rank == (x + j - 1)->rank && tmp.value < (x + j - 1)->value))) {
+      x[j] = x[j - 1];
+      j--;
+    }
+    x[j] = tmp;
+  }
+}
 
 struct thread_data {
   int *agg;
@@ -32,8 +123,8 @@ struct uniqueN_int_data {
 
 
 int uniqueN_int_cmp(const void *x, const void *y) {
-  struct uniqueN_int_data *xx = (struct uniqueN_int_data *) x;
-  struct uniqueN_int_data *yy = (struct uniqueN_int_data *) y;
+  struct uniqueN_data *xx = (struct uniqueN_data *) x;
+  struct uniqueN_data *yy = (struct uniqueN_data *) y;
 
   if (xx->rank < yy->rank) {
     return -1;
@@ -460,8 +551,13 @@ void *lfdcast_core(void *td_void) {
         int *output = ((int **) res)[j];
         int *input = ((int **) value_var)[j];
 
-        struct uniqueN_int_data *uniqueN_data =
-          (struct uniqueN_int_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_int_data));
+        struct uniqueN_data *uniqueN_data =
+          (struct uniqueN_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_data));
+
+        int (*hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
+        memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
+        int (*hist_value)[n_bucket] = malloc(sizeof(int[n_pass_value][n_bucket]));
+        memset(hist_value, 0, n_pass_value * n_bucket * sizeof(int));
 
         int uniqueN_data_length = 0;
         if (na_rm[j]) {
@@ -469,6 +565,14 @@ void *lfdcast_core(void *td_void) {
             if (input[i] != NA_INTEGER) {
               (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
               (uniqueN_data + uniqueN_data_length)->value = input[i];
+
+              for (int jj = 0; jj < n_pass_rank; jj++) {
+                hist_rank[jj][(uniqueN_data + uniqueN_data_length)->rank >> jj * shift & mask]++;
+              }
+              for (int jj = 0; jj < n_pass_value; jj++) {
+                hist_value[jj][(uniqueN_data + uniqueN_data_length)->value >> jj * shift & mask]++;
+              }
+
               uniqueN_data_length++;
             }
           }
@@ -476,12 +580,21 @@ void *lfdcast_core(void *td_void) {
           LOOP_OVER_ROWS {
             (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
             (uniqueN_data + ii)->value = input[i];
+
+            for (int jj = 0; jj < n_pass_rank; jj++) {
+              hist_rank[jj][(uniqueN_data + ii)->rank >> jj * shift & mask]++;
+            }
+            for (int jj = 0; jj < n_pass_value; jj++) {
+              hist_value[jj][(uniqueN_data + ii)->value >> jj * shift & mask]++;
+            }
           }
           uniqueN_data_length = map_output_cols_to_input_rows_lengths[j];
         }
 
         if (uniqueN_data_length > 0) {
-          qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_int_data), uniqueN_int_cmp);
+          //isort(uniqueN_data, uniqueN_data_length);
+          //rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value);
+          qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_data), uniqueN_int_cmp);
 
           output[(uniqueN_data)->rank] = 1;
           for (int i = 1; i < uniqueN_data_length; i ++) {
@@ -496,27 +609,49 @@ void *lfdcast_core(void *td_void) {
         }
 
         free(uniqueN_data);
+        free(hist_rank);
+        free(hist_value);
 
       } else if (typeof_value_var[j] == REALSXP) {
         int *output = ((int **) res)[j];
         double *input = ((double **) value_var)[j];
 
-        struct uniqueN_double_data *uniqueN_data =
-          (struct uniqueN_double_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_double_data));
+        struct uniqueN_data *uniqueN_data =
+          (struct uniqueN_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_data));
+
+        int (*hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
+        memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
+        int (*hist_value)[n_bucket] = malloc(sizeof(int[n_pass_value][n_bucket]));
+        memset(hist_value, 0, n_pass_value * n_bucket * sizeof(int));
 
         if (na_rm[j]) {
           int uniqueN_data_length = 0;
+          double zero = 0;
 
           LOOP_OVER_ROWS {
             if (!ISNAN(input[i])) {
               (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
-              (uniqueN_data + uniqueN_data_length)->value = input[i];
+              if (input[i] == 0) {
+                (uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(zero);
+              } else {
+                (uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(input[i]);
+              }
+
+
+              for (int jj = 0; jj < n_pass_rank; jj++) {
+                hist_rank[jj][(uniqueN_data + uniqueN_data_length)->rank >> jj * shift & mask]++;
+              }
+              for (int jj = 0; jj < n_pass_value; jj++) {
+                hist_value[jj][(uniqueN_data + uniqueN_data_length)->value >> jj * shift & mask]++;
+              }
+
               uniqueN_data_length++;
             }
           }
 
           if (uniqueN_data_length > 0) {
-            qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_double_data), uniqueN_double_cmp_no_NaN);
+            rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value);
+            //qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_double_data), uniqueN_double_cmp_no_NaN);
 
             output[(uniqueN_data)->rank] = 1;
             for (int i = 1; i < uniqueN_data_length; i ++) {
@@ -531,12 +666,26 @@ void *lfdcast_core(void *td_void) {
           }
 
         } else {
+          double zero = 0;
           LOOP_OVER_ROWS {
             (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
-            (uniqueN_data + ii)->value = input[i];
+            if (input[i] == 0) {
+              (uniqueN_data + ii)->value = *(uint64_t *) &(zero);
+            } else {
+              (uniqueN_data + ii)->value = *(uint64_t *) &(input[i]);
+            }
+
+
+            for (int jj = 0; jj < n_pass_rank; jj++) {
+              hist_rank[jj][(uniqueN_data + ii)->rank >> jj * shift & mask]++;
+            }
+            for (int jj = 0; jj < n_pass_value; jj++) {
+              hist_value[jj][(uniqueN_data + ii)->value >> jj * shift & mask]++;
+            }
           }
 
-          qsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], sizeof(struct uniqueN_double_data), uniqueN_double_cmp);
+          rsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], hist_rank, hist_value);
+          //qsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], sizeof(struct uniqueN_double_data), uniqueN_double_cmp);
 
           if (map_output_cols_to_input_rows_lengths[j] > 0) {
             output[(uniqueN_data)->rank] = 1;
@@ -544,9 +693,11 @@ void *lfdcast_core(void *td_void) {
 
           for (int i = 1; i < map_output_cols_to_input_rows_lengths[j]; i ++) {
             if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
-              if ((ISNA((uniqueN_data + i)->value) != ISNA((uniqueN_data + i - 1)->value)) ||
-                  (R_IsNaN((uniqueN_data + i)->value) != R_IsNaN((uniqueN_data + i - 1)->value)) ||
-                  (!ISNAN((uniqueN_data + i)->value) && !ISNAN((uniqueN_data + i - 1)->value) && (uniqueN_data + i)->value != (uniqueN_data + i - 1)->value)) {
+              double v = *(double *) &(uniqueN_data + i)->value;
+              double vp = *(double *) &(uniqueN_data + i - 1)->value;
+              if ((ISNA(v) != ISNA(vp)) ||
+                  (R_IsNaN(v) != R_IsNaN(vp)) ||
+                  (!ISNAN(v) && !ISNAN(vp) && (v != vp))) {
                 output[(uniqueN_data + i)->rank]++;
               }
             } else {
@@ -562,8 +713,13 @@ void *lfdcast_core(void *td_void) {
         int *output = ((int **) res)[j];
         intptr_t *input = ((intptr_t **) value_var)[j];
 
-        struct uniqueN_char_data *uniqueN_data =
-          (struct uniqueN_char_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_char_data));
+        struct uniqueN_data *uniqueN_data =
+          (struct uniqueN_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_data));
+
+        int (*hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
+        memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
+        int (*hist_value)[n_bucket] = malloc(sizeof(int[n_pass_value][n_bucket]));
+        memset(hist_value, 0, n_pass_value * n_bucket * sizeof(int));
 
         int uniqueN_data_length = 0;
         if (na_rm[j]) {
@@ -571,6 +727,14 @@ void *lfdcast_core(void *td_void) {
             if (input[i] != (intptr_t) NA_STRING) {
               (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
               (uniqueN_data + uniqueN_data_length)->value = input[i];
+
+              for (int jj = 0; jj < n_pass_rank; jj++) {
+                hist_rank[jj][(uniqueN_data + uniqueN_data_length)->rank >> jj * shift & mask]++;
+              }
+              for (int jj = 0; jj < n_pass_value; jj++) {
+                hist_value[jj][(uniqueN_data + uniqueN_data_length)->value >> jj * shift & mask]++;
+              }
+
               uniqueN_data_length++;
             }
           }
@@ -578,12 +742,20 @@ void *lfdcast_core(void *td_void) {
           LOOP_OVER_ROWS {
             (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
             (uniqueN_data + ii)->value = input[i];
+
+            for (int jj = 0; jj < n_pass_rank; jj++) {
+              hist_rank[jj][(uniqueN_data + ii)->rank >> jj * shift & mask]++;
+            }
+            for (int jj = 0; jj < n_pass_value; jj++) {
+              hist_value[jj][(uniqueN_data + ii)->value >> jj * shift & mask]++;
+            }
           }
           uniqueN_data_length = map_output_cols_to_input_rows_lengths[j];
         }
 
         if (uniqueN_data_length > 0) {
-          qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_char_data), uniqueN_char_cmp);
+          rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value);
+          // qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_char_data), uniqueN_char_cmp);
 
           output[(uniqueN_data)->rank] = 1;
           for (int i = 1; i < uniqueN_data_length; i ++) {
