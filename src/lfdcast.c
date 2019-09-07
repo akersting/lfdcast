@@ -4,6 +4,7 @@
 #define USE_RINTERNALS
 #endif
 
+#include "R.h"
 #include "Rinternals.h"
 #include <stdlib.h>
 #include <stdint.h>
@@ -226,12 +227,36 @@ int uniqueN_char_cmp(const void *x, const void *y) {
   }
 }
 
+#define INPUT_I                                                \
+  (typeof_value_var[j] == LGLSXP ||                            \
+   typeof_value_var[j] == INTSXP ?                             \
+    (double) ((int *) input)[i] :                              \
+    ((double *) input)[i])
+
+#define ISNA_INPUT_I (((typeof_value_var[j] == INTSXP ||       \
+                        typeof_value_var[j] == LGLSXP)         \
+                       && ((int *)input)[i] == NA_INTEGER) ||  \
+                      (typeof_value_var[j] == REALSXP &&       \
+                       ISNAN(((double *)input)[i])) ||         \
+                      (typeof_value_var[j] == STRSXP &&        \
+                       ((SEXP *)input)[i] == NA_STRING))
 
 #define LOOP_OVER_ROWS                                         \
   for (int ii = 0, i = map_output_cols_to_input_rows[j][0];    \
     ii < map_output_cols_to_input_rows_lengths[j];             \
     ii++, i = map_output_cols_to_input_rows[j][ii])                                                      \
 
+#define OUTPUT_I output[map_input_rows_to_output_rows[i]]
+#define HIT_I hit[map_input_rows_to_output_rows[i]]
+
+#define FILL_OUTPUT                                            \
+    for (int i = 0; i < n_row_output; i++) {                   \
+      if (hit[i] > 0) continue;                                \
+      output[i] = default_res;                                 \
+    }
+
+pthread_mutex_t string_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t rng_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void *lfdcast_core(void *td_void) {
   struct thread_data *td = (struct thread_data *) td_void;
@@ -248,97 +273,33 @@ void *lfdcast_core(void *td_void) {
   int *map_input_rows_to_output_rows = td->map_input_rows_to_output_rows;
   int n_row_output = td->n_row_output;
 
+  int *hit = (int *) malloc(n_row_output * sizeof(int));
+
   for (int jj = 0; jj < length_cols_split; jj++) {
     int j = cols_split[jj];
+
+    memset(hit, 0, n_row_output * sizeof(int));
 
     switch(agg[j]) {
     case 1:  // count
     {
       int *output = ((int **) res)[j];
+      void *input = value_var[j];
 
-      if (output[0] == 0) {
-        if (na_rm[j]) {
-          if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
-            int *input = ((int **) value_var)[j];
-            LOOP_OVER_ROWS {
-              if (input[i] != NA_INTEGER) {
-                output[map_input_rows_to_output_rows[i]]++;
-              }
-            }
-          } else if (typeof_value_var[j] == REALSXP) {
-            double *input = ((double **) value_var)[j];
-            LOOP_OVER_ROWS {
-              if (!ISNAN(input[i])) {
-                output[map_input_rows_to_output_rows[i]]++;
-              }
-            }
-          } else if (typeof_value_var[j] == STRSXP) {
-            SEXP *input = ((SEXP **) value_var)[j];
-            LOOP_OVER_ROWS {
-              if (input[i] != NA_STRING) {
-                output[map_input_rows_to_output_rows[i]]++;
-              }
-            }
-          }
-        } else {
-          LOOP_OVER_ROWS {
-            output[map_input_rows_to_output_rows[i]]++;
-          }
-        }
-      } else {
-        char *hit = (char *) calloc(n_row_output, sizeof(char));
-
-        if (na_rm[j]) {
-          if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
-            int *input = ((int **) value_var)[j];
-            LOOP_OVER_ROWS {
-              if (input[i] != NA_INTEGER) {
-                if (hit[map_input_rows_to_output_rows[i]]) {
-                  output[map_input_rows_to_output_rows[i]]++;
-                } else {
-                  output[map_input_rows_to_output_rows[i]] = 1;
-                  hit[map_input_rows_to_output_rows[i]] = 1;
-                }
-              }
-            }
-          } else if (typeof_value_var[j] == REALSXP) {
-            double *input = ((double **) value_var)[j];
-            LOOP_OVER_ROWS {
-              if (!ISNAN(input[i])) {
-                if (hit[map_input_rows_to_output_rows[i]]) {
-                  output[map_input_rows_to_output_rows[i]]++;
-                } else {
-                  output[map_input_rows_to_output_rows[i]] = 1;
-                  hit[map_input_rows_to_output_rows[i]] = 1;
-                }
-              }
-            }
-          } else if (typeof_value_var[j] == STRSXP) {
-            SEXP *input = ((SEXP **) value_var)[j];
-            LOOP_OVER_ROWS {
-              if (input[i] != NA_STRING) {
-                if (hit[map_input_rows_to_output_rows[i]]) {
-                  output[map_input_rows_to_output_rows[i]]++;
-                } else {
-                  output[map_input_rows_to_output_rows[i]] = 1;
-                  hit[map_input_rows_to_output_rows[i]] = 1;
-                }
-              }
-            }
-          }
-        } else {
-          LOOP_OVER_ROWS {
-            if (hit[map_input_rows_to_output_rows[i]]) {
-              output[map_input_rows_to_output_rows[i]]++;
-            } else {
-              output[map_input_rows_to_output_rows[i]] = 1;
-              hit[map_input_rows_to_output_rows[i]] = 1;
-            }
-          }
-        }
-        free(hit);
+      int default_res = output[0];
+      if (default_res != 0) {
+        memset(output, 0, n_row_output * sizeof(int));
       }
 
+      LOOP_OVER_ROWS {
+        if (na_rm[j] && ISNA_INPUT_I) continue;
+        OUTPUT_I++;
+        HIT_I = 1;
+      }
+
+      if (default_res != 0) {
+        FILL_OUTPUT
+      }
 
       break;
     }
@@ -346,34 +307,11 @@ void *lfdcast_core(void *td_void) {
     case 2:  // existence
     {
       int *output = ((int **) res)[j];
+      void *input = value_var[j];
 
-      if (na_rm[j]) {
-        if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
-          int *input = ((int **) value_var)[j];
-          LOOP_OVER_ROWS {
-            if (input[i] != NA_INTEGER) {
-              output[map_input_rows_to_output_rows[i]] = TRUE;
-            }
-          }
-        } else if (typeof_value_var[j] == REALSXP) {
-          double *input = ((double **) value_var)[j];
-          LOOP_OVER_ROWS {
-            if (!ISNAN(input[i])) {
-              output[map_input_rows_to_output_rows[i]] = TRUE;
-            }
-          }
-        } else if (typeof_value_var[j] == STRSXP) {
-          SEXP *input = ((SEXP **) value_var)[j];
-          LOOP_OVER_ROWS {
-            if (input[i] != NA_STRING) {
-              output[map_input_rows_to_output_rows[i]] = TRUE;
-            }
-          }
-        }
-      } else {
-        LOOP_OVER_ROWS {
-          output[map_input_rows_to_output_rows[i]] = TRUE;
-        }
+      LOOP_OVER_ROWS {
+        if (na_rm[j] && ISNA_INPUT_I) continue;
+        OUTPUT_I = TRUE;
       }
 
       break;
@@ -381,317 +319,109 @@ void *lfdcast_core(void *td_void) {
 
     case 3:  // sum
     {
-      if (typeof_value_var[j] == LGLSXP) {
+      if (typeof_res[j] == INTSXP) {
         int *output = ((int **) res)[j];
         int *input = ((int **) value_var)[j];
 
-        if (output[0] == 0) {
-          if (na_rm[j]) {
-            LOOP_OVER_ROWS {
-              if (input[i] != NA_LOGICAL) {
-                output[map_input_rows_to_output_rows[i]] += input[i];
-              }
-            }
-          } else {
-            LOOP_OVER_ROWS {
-              if (output[map_input_rows_to_output_rows[i]] != NA_INTEGER) {
-                if (input[i] != NA_LOGICAL) {
-                  output[map_input_rows_to_output_rows[i]] += input[i];
-                } else {
-                  output[map_input_rows_to_output_rows[i]] = NA_INTEGER;
-                }
-              }
-            }
-          }
-        } else {
-          char *hit = (char *) calloc(n_row_output, sizeof(char));
-
-          if (na_rm[j]) {
-            LOOP_OVER_ROWS {
-              if (input[i] != NA_LOGICAL) {
-                if (hit[map_input_rows_to_output_rows[i]]) {
-                  output[map_input_rows_to_output_rows[i]] += input[i];
-                } else {
-                  output[map_input_rows_to_output_rows[i]] = input[i];
-                  hit[map_input_rows_to_output_rows[i]] = 1;
-                }
-              }
-            }
-          } else {
-            LOOP_OVER_ROWS {
-              if (hit[map_input_rows_to_output_rows[i]]) {
-                if (output[map_input_rows_to_output_rows[i]] != NA_INTEGER) {
-                  if (input[i] != NA_LOGICAL) {
-                    output[map_input_rows_to_output_rows[i]] += input[i];
-                  } else {
-                    output[map_input_rows_to_output_rows[i]] = NA_INTEGER;
-                  }
-                }
-              } else {
-                output[map_input_rows_to_output_rows[i]] = input[i];
-                hit[map_input_rows_to_output_rows[i]] = 1;
-              }
-            }
-          }
-
-          free(hit);
+        int default_res = output[0];
+        if (default_res != 0) {
+          memset(output, 0, n_row_output * sizeof(int));
         }
 
-      } else if (typeof_value_var[j] == INTSXP) {
-        double *output = ((double **) res)[j];
-        int *input = ((int **) value_var)[j];
-
-        if (output[0] == 0) {
-          if (na_rm[j]) {
-            LOOP_OVER_ROWS {
-              if (input[i] != NA_INTEGER) {
-                output[map_input_rows_to_output_rows[i]] += input[i];
-              }
-            }
+        LOOP_OVER_ROWS {
+          if (input[i] == NA_LOGICAL) {
+            if (na_rm[j]) continue;
+            OUTPUT_I = NA_INTEGER;
           } else {
-            LOOP_OVER_ROWS {
-              if (!ISNAN(output[map_input_rows_to_output_rows[i]])) {
-                if (input[i] != NA_INTEGER) {
-                  output[map_input_rows_to_output_rows[i]] += input[i];
-                } else {
-                  output[map_input_rows_to_output_rows[i]] = NA_REAL;
-                }
-              }
-            }
+            if (OUTPUT_I == NA_INTEGER) continue;
+            OUTPUT_I += input[i];
           }
-        } else {
-          char *hit = (char *) calloc(n_row_output, sizeof(char));
-
-          if (na_rm[j]) {
-            LOOP_OVER_ROWS {
-              if (input[i] != NA_INTEGER) {
-                if (hit[map_input_rows_to_output_rows[i]]) {
-                  output[map_input_rows_to_output_rows[i]] += input[i];
-                } else {
-                  output[map_input_rows_to_output_rows[i]] = input[i];
-                  hit[map_input_rows_to_output_rows[i]] = 1;
-                }
-              }
-            }
-          } else {
-            LOOP_OVER_ROWS {
-              if (hit[map_input_rows_to_output_rows[i]]) {
-                if (!ISNAN(output[map_input_rows_to_output_rows[i]])) {
-                  if (input[i] != NA_INTEGER) {
-                    output[map_input_rows_to_output_rows[i]] += input[i];
-                  } else {
-                    output[map_input_rows_to_output_rows[i]] = NA_REAL;
-                  }
-                }
-              } else {
-                if (input[i] != NA_INTEGER) {
-                  output[map_input_rows_to_output_rows[i]] = input[i];
-                } else {
-                  output[map_input_rows_to_output_rows[i]] = NA_REAL;
-                }
-                hit[map_input_rows_to_output_rows[i]] = 1;
-              }
-            }
-          }
-
-          free(hit);
+          HIT_I = 1;
         }
 
-      } else if (typeof_value_var[j] == REALSXP) {
+        if (default_res != 0) {
+          FILL_OUTPUT
+        }
+
+      } else {
+        void *input = value_var[j];
         double *output = ((double **) res)[j];
-        double *input = ((double **) value_var)[j];
 
-        if (output[0] == 0) {
-          if (na_rm[j]) {
-            LOOP_OVER_ROWS {
-              if (!ISNAN(input[i])) {
-                output[map_input_rows_to_output_rows[i]] += input[i];
-              }
-            }
-          } else {
-            LOOP_OVER_ROWS {
-              output[map_input_rows_to_output_rows[i]] += input[i];
-            }
+        double default_res = output[0];
+        if (default_res != 0) {
+          for (int i = 0; i < n_row_output; i++) {
+            output[i] = 0;
           }
-        } else {
-          char *hit = (char *) calloc(n_row_output, sizeof(char));
+        }
 
-          if (na_rm[j]) {
-            LOOP_OVER_ROWS {
-              if (!ISNAN(input[i])) {
-                if (hit[map_input_rows_to_output_rows[i]]) {
-                  output[map_input_rows_to_output_rows[i]] += input[i];
-                } else {
-                  output[map_input_rows_to_output_rows[i]] = input[i];
-                  hit[map_input_rows_to_output_rows[i]] = 1;
-                }
-              }
-            }
+        LOOP_OVER_ROWS {
+          if (ISNA_INPUT_I) {
+            if (na_rm[j]) continue;
+            OUTPUT_I = NA_REAL;
           } else {
-            LOOP_OVER_ROWS {
-              if (hit[map_input_rows_to_output_rows[i]]) {
-                output[map_input_rows_to_output_rows[i]] += input[i];
-              } else {
-                output[map_input_rows_to_output_rows[i]] = input[i];
-                hit[map_input_rows_to_output_rows[i]] = 1;
-              }
-            }
+            if (ISNAN(OUTPUT_I)) continue;
+            OUTPUT_I += INPUT_I;
           }
+          HIT_I = 1;
+        }
 
-          free(hit);
+        if (default_res != 0) {
+          FILL_OUTPUT
         }
       }
 
       break;
     }
-
     case 4:  // uniqueN
     {
-      if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
-        int *output = ((int **) res)[j];
-        int *input = ((int **) value_var)[j];
+      int *output = ((int **) res)[j];
+      void *input = value_var[j];
 
-        struct uniqueN_data *uniqueN_data =
-          (struct uniqueN_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_data));
+      struct uniqueN_data *uniqueN_data =
+        (struct uniqueN_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_data));
 
-        int (*hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
-        memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
-        int (*hist_value)[n_bucket] = malloc(sizeof(int[n_pass_value][n_bucket]));
-        memset(hist_value, 0, n_pass_value * n_bucket * sizeof(int));
+      int (*hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
+      int (*hist_value)[n_bucket] = malloc(sizeof(int[n_pass_value][n_bucket]));
+      memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
+      memset(hist_value, 0, n_pass_value * n_bucket * sizeof(int));
 
-        int uniqueN_data_length = 0;
-        if (na_rm[j]) {
-          LOOP_OVER_ROWS {
-            if (input[i] != NA_INTEGER) {
-              (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
-              (uniqueN_data + uniqueN_data_length)->value = input[i];
+      int uniqueN_data_length = 0;
+      double zero = 0;
+      LOOP_OVER_ROWS {
+        if (na_rm[j] && ISNA_INPUT_I) continue;
 
-              for (int jj = 0; jj < n_pass_rank; jj++) {
-                hist_rank[jj][(uniqueN_data + uniqueN_data_length)->rank >> jj * shift & mask]++;
-              }
-              for (int jj = 0; jj < n_pass_value; jj++) {
-                hist_value[jj][(uniqueN_data + uniqueN_data_length)->value >> jj * shift & mask]++;
-              }
-
-              uniqueN_data_length++;
-            }
+        (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
+        if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
+          (uniqueN_data + uniqueN_data_length)->value = ((int *) input)[i];
+        } else if (typeof_value_var[j] == REALSXP) {
+          if (((double *) input)[i] == 0) {
+            (uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(zero);
+          } else {
+            (uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(((double *) input)[i]);
           }
-        } else {
-          LOOP_OVER_ROWS {
-            (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
-            (uniqueN_data + ii)->value = input[i];
-
-            for (int jj = 0; jj < n_pass_rank; jj++) {
-              hist_rank[jj][(uniqueN_data + ii)->rank >> jj * shift & mask]++;
-            }
-            for (int jj = 0; jj < n_pass_value; jj++) {
-              hist_value[jj][(uniqueN_data + ii)->value >> jj * shift & mask]++;
-            }
-          }
-          uniqueN_data_length = map_output_cols_to_input_rows_lengths[j];
+        } else if (typeof_value_var[j] == STRSXP) {
+          (uniqueN_data + uniqueN_data_length)->value = ((intptr_t *) input)[i];
         }
 
-        if (uniqueN_data_length > 0) {
-          //isort(uniqueN_data, uniqueN_data_length);
-          //rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value);
-          qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_data), uniqueN_int_cmp);
+        for (int jj = 0; jj < n_pass_rank; jj++) {
+          hist_rank[jj][(uniqueN_data + uniqueN_data_length)->rank >> jj * shift & mask]++;
+        }
+        for (int jj = 0; jj < n_pass_value; jj++) {
+          hist_value[jj][(uniqueN_data + uniqueN_data_length)->value >> jj * shift & mask]++;
+        }
 
-          output[(uniqueN_data)->rank] = 1;
+        uniqueN_data_length++;
+      }
+
+      if (uniqueN_data_length > 0) {
+        //isort(uniqueN_data, uniqueN_data_length);
+        rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value);
+        //qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_data), uniqueN_int_cmp);
+
+        output[(uniqueN_data)->rank] = 1;
+
+        if (typeof_value_var[j] == REALSXP) {
           for (int i = 1; i < uniqueN_data_length; i ++) {
-            if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
-              if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
-                output[(uniqueN_data + i)->rank]++;
-              }
-            } else {
-              output[(uniqueN_data + i)->rank] = 1;
-            }
-          }
-        }
-
-        free(uniqueN_data);
-        free(hist_rank);
-        free(hist_value);
-
-      } else if (typeof_value_var[j] == REALSXP) {
-        int *output = ((int **) res)[j];
-        double *input = ((double **) value_var)[j];
-
-        struct uniqueN_data *uniqueN_data =
-          (struct uniqueN_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_data));
-
-        int (*hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
-        memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
-        int (*hist_value)[n_bucket] = malloc(sizeof(int[n_pass_value][n_bucket]));
-        memset(hist_value, 0, n_pass_value * n_bucket * sizeof(int));
-
-        if (na_rm[j]) {
-          int uniqueN_data_length = 0;
-          double zero = 0;
-
-          LOOP_OVER_ROWS {
-            if (!ISNAN(input[i])) {
-              (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
-              if (input[i] == 0) {
-                (uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(zero);
-              } else {
-                (uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(input[i]);
-              }
-
-
-              for (int jj = 0; jj < n_pass_rank; jj++) {
-                hist_rank[jj][(uniqueN_data + uniqueN_data_length)->rank >> jj * shift & mask]++;
-              }
-              for (int jj = 0; jj < n_pass_value; jj++) {
-                hist_value[jj][(uniqueN_data + uniqueN_data_length)->value >> jj * shift & mask]++;
-              }
-
-              uniqueN_data_length++;
-            }
-          }
-
-          if (uniqueN_data_length > 0) {
-            rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value);
-            //qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_double_data), uniqueN_double_cmp_no_NaN);
-
-            output[(uniqueN_data)->rank] = 1;
-            for (int i = 1; i < uniqueN_data_length; i ++) {
-              if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
-                if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
-                  output[(uniqueN_data + i)->rank]++;
-                }
-              } else {
-                output[(uniqueN_data + i)->rank] = 1;
-              }
-            }
-          }
-
-        } else {
-          double zero = 0;
-          LOOP_OVER_ROWS {
-            (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
-            if (input[i] == 0) {
-              (uniqueN_data + ii)->value = *(uint64_t *) &(zero);
-            } else {
-              (uniqueN_data + ii)->value = *(uint64_t *) &(input[i]);
-            }
-
-
-            for (int jj = 0; jj < n_pass_rank; jj++) {
-              hist_rank[jj][(uniqueN_data + ii)->rank >> jj * shift & mask]++;
-            }
-            for (int jj = 0; jj < n_pass_value; jj++) {
-              hist_value[jj][(uniqueN_data + ii)->value >> jj * shift & mask]++;
-            }
-          }
-
-          rsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], hist_rank, hist_value);
-          //qsort(uniqueN_data, map_output_cols_to_input_rows_lengths[j], sizeof(struct uniqueN_double_data), uniqueN_double_cmp);
-
-          if (map_output_cols_to_input_rows_lengths[j] > 0) {
-            output[(uniqueN_data)->rank] = 1;
-          }
-
-          for (int i = 1; i < map_output_cols_to_input_rows_lengths[j]; i ++) {
             if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
               double v = *(double *) &(uniqueN_data + i)->value;
               double vp = *(double *) &(uniqueN_data + i - 1)->value;
@@ -704,60 +434,7 @@ void *lfdcast_core(void *td_void) {
               output[(uniqueN_data + i)->rank] = 1;
             }
           }
-        }
-
-        free(uniqueN_data);
-
-
-      } else if (typeof_value_var[j] == STRSXP) {
-        int *output = ((int **) res)[j];
-        intptr_t *input = ((intptr_t **) value_var)[j];
-
-        struct uniqueN_data *uniqueN_data =
-          (struct uniqueN_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_data));
-
-        int (*hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
-        memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
-        int (*hist_value)[n_bucket] = malloc(sizeof(int[n_pass_value][n_bucket]));
-        memset(hist_value, 0, n_pass_value * n_bucket * sizeof(int));
-
-        int uniqueN_data_length = 0;
-        if (na_rm[j]) {
-          LOOP_OVER_ROWS {
-            if (input[i] != (intptr_t) NA_STRING) {
-              (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
-              (uniqueN_data + uniqueN_data_length)->value = input[i];
-
-              for (int jj = 0; jj < n_pass_rank; jj++) {
-                hist_rank[jj][(uniqueN_data + uniqueN_data_length)->rank >> jj * shift & mask]++;
-              }
-              for (int jj = 0; jj < n_pass_value; jj++) {
-                hist_value[jj][(uniqueN_data + uniqueN_data_length)->value >> jj * shift & mask]++;
-              }
-
-              uniqueN_data_length++;
-            }
-          }
         } else {
-          LOOP_OVER_ROWS {
-            (uniqueN_data + ii)->rank = map_input_rows_to_output_rows[i];
-            (uniqueN_data + ii)->value = input[i];
-
-            for (int jj = 0; jj < n_pass_rank; jj++) {
-              hist_rank[jj][(uniqueN_data + ii)->rank >> jj * shift & mask]++;
-            }
-            for (int jj = 0; jj < n_pass_value; jj++) {
-              hist_value[jj][(uniqueN_data + ii)->value >> jj * shift & mask]++;
-            }
-          }
-          uniqueN_data_length = map_output_cols_to_input_rows_lengths[j];
-        }
-
-        if (uniqueN_data_length > 0) {
-          rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value);
-          // qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_char_data), uniqueN_char_cmp);
-
-          output[(uniqueN_data)->rank] = 1;
           for (int i = 1; i < uniqueN_data_length; i ++) {
             if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
               if ((uniqueN_data + i)->value != (uniqueN_data + i - 1)->value) {
@@ -768,119 +445,68 @@ void *lfdcast_core(void *td_void) {
             }
           }
         }
-
-        free(uniqueN_data);
       }
+
+      free(uniqueN_data);
+      free(hist_rank);
+      free(hist_value);
 
       break;
     }
 
     case 5:  // min
     {
-      if ((typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) &&
-          typeof_res[j] == INTSXP) {
+      if (typeof_res[j] == INTSXP) {
+        int *input = ((int **) value_var)[j];
         int *output = ((int **) res)[j];
-        int *input = ((int **) value_var)[j];
 
-        char *hit = (char *) calloc(n_row_output, sizeof(char));
-
-        if (na_rm[j]) {
-          LOOP_OVER_ROWS {
-            // this exploits that NA_LOGICAL := NA_INTEGER
-            if (input[i] == NA_INTEGER) continue;
-            if (hit[map_input_rows_to_output_rows[i]]) {
-              if (input[i] < output[map_input_rows_to_output_rows[i]]) {
-                output[map_input_rows_to_output_rows[i]] = input[i];
-              }
-            } else {
-              output[map_input_rows_to_output_rows[i]] = input[i];
-              hit[map_input_rows_to_output_rows[i]] = 1;
-            }
-          }
-        } else {
-          LOOP_OVER_ROWS {
-            if (hit[map_input_rows_to_output_rows[i]]) {
-              // this exploits that NA_INTEGER := INT_MIN
-              if (input[i] < output[map_input_rows_to_output_rows[i]]) {
-                output[map_input_rows_to_output_rows[i]] = input[i];
-              }
-            } else {
-              output[map_input_rows_to_output_rows[i]] = input[i];
-              hit[map_input_rows_to_output_rows[i]] = 1;
-            }
+        int default_res = output[0];
+        if (default_res != INT_MAX) {
+          for (int i = 0; i < n_row_output; i++) {
+            output[i] = INT_MAX;
           }
         }
-
-        free(hit);
-      } else if ((typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) &&
-                 typeof_res[j] == REALSXP) {
-        double *output = ((double **) res)[j];
-        int *input = ((int **) value_var)[j];
-
-        char *hit = (char *) calloc(n_row_output, sizeof(char));
-
-        if (na_rm[j]) {
-          LOOP_OVER_ROWS {
-            // this exploits that NA_LOGICAL := NA_INTEGER
-            if (input[i] == NA_INTEGER) continue;
-            if (hit[map_input_rows_to_output_rows[i]]) {
-              if (input[i] < output[map_input_rows_to_output_rows[i]]) {
-                output[map_input_rows_to_output_rows[i]] = input[i];
-              }
-            } else {
-              output[map_input_rows_to_output_rows[i]] = input[i];
-              hit[map_input_rows_to_output_rows[i]] = 1;
-            }
-          }
-        } else {
-          LOOP_OVER_ROWS {
-            if (hit[map_input_rows_to_output_rows[i]]) {
-              if (input[i] != NA_INTEGER) {
-                if(!ISNAN(output[map_input_rows_to_output_rows[i]]) &&
-                   input[i] < output[map_input_rows_to_output_rows[i]]) {
-                  output[map_input_rows_to_output_rows[i]] = input[i];
-                }
-              } else {
-                output[map_input_rows_to_output_rows[i]] = NA_REAL;
-              }
-            } else {
-              if (input[i] != NA_INTEGER) {
-                output[map_input_rows_to_output_rows[i]] = input[i];
-              } else {
-                output[map_input_rows_to_output_rows[i]] = NA_REAL;
-              }
-              hit[map_input_rows_to_output_rows[i]] = 1;
-            }
-          }
-        }
-
-        free(hit);
-      } else if (typeof_value_var[j] == REALSXP) {
-        double *output = ((double **) res)[j];
-        double *input = ((double **) value_var)[j];
-
-        char *hit = (char *) calloc(n_row_output, sizeof(char));
 
         LOOP_OVER_ROWS {
-          if (ISNAN(input[i])) {
-            if (na_rm[j]) {
-              continue;
-            } else {
-              output[map_input_rows_to_output_rows[i]] = NA_REAL;
-              hit[map_input_rows_to_output_rows[i]] = 1;
-            }
-          } else if (hit[map_input_rows_to_output_rows[i]]) {
-            if (!ISNAN(output[map_input_rows_to_output_rows[i]]) &&
-                input[i] < output[map_input_rows_to_output_rows[i]]) {
-              output[map_input_rows_to_output_rows[i]] = input[i];
-            }
+          if (input[i] == NA_INTEGER) {
+            if (na_rm[j]) continue;
+            OUTPUT_I = NA_INTEGER;
           } else {
-            output[map_input_rows_to_output_rows[i]] = input[i];
-            hit[map_input_rows_to_output_rows[i]] = 1;
+            if (OUTPUT_I == NA_INTEGER) continue;
+            if (input[i] < OUTPUT_I) OUTPUT_I = input[i];
+          }
+          HIT_I = 1;
+        }
+
+        if (default_res != INT_MAX) {
+          FILL_OUTPUT
+        }
+
+      } else {
+        void *input = value_var[j];
+        double *output = ((double **) res)[j];
+
+        double default_res = output[0];
+        if (default_res != R_PosInf) {
+          for (int i = 0; i < n_row_output; i++) {
+            output[i] = R_PosInf;
           }
         }
 
-        free(hit);
+        LOOP_OVER_ROWS {
+          if (ISNA_INPUT_I) {
+            if (na_rm[j]) continue;
+            OUTPUT_I = NA_REAL;
+          } else {
+            if (ISNAN(OUTPUT_I)) continue;
+            if (INPUT_I < OUTPUT_I) OUTPUT_I = INPUT_I;
+          }
+          HIT_I = 1;
+        }
+
+        if (default_res != R_PosInf) {
+          FILL_OUTPUT
+        }
       }
 
       break;
@@ -888,118 +514,188 @@ void *lfdcast_core(void *td_void) {
 
     case 6:  // max
     {
-      if ((typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) &&
-          typeof_res[j] == INTSXP) {
+      if (typeof_res[j] == INTSXP) {
+        int *input = ((int **) value_var)[j];
+        int *output = ((int **) res)[j];
+
+        int default_res = output[0];
+        if (default_res != INT_MIN + 1) {
+          for (int i = 0; i < n_row_output; i++) {
+            output[i] = INT_MIN + 1;
+          }
+        }
+
+        LOOP_OVER_ROWS {
+          if (input[i] == NA_INTEGER) {
+            if (na_rm[j]) continue;
+            OUTPUT_I = NA_INTEGER;
+          } else {
+            if (OUTPUT_I == NA_INTEGER) continue;
+            if (input[i] > OUTPUT_I) OUTPUT_I = input[i];
+          }
+          HIT_I = 1;
+        }
+
+        if (default_res != INT_MIN + 1) {
+          FILL_OUTPUT
+        }
+
+      } else {
+        void *input = value_var[j];
+        double *output = ((double **) res)[j];
+
+        double default_res = output[0];
+        if (default_res != R_NegInf) {
+          for (int i = 0; i < n_row_output; i++) {
+            output[i] = R_NegInf;
+          }
+        }
+
+        LOOP_OVER_ROWS {
+          if (ISNA_INPUT_I) {
+            if (na_rm[j]) continue;
+            OUTPUT_I = NA_REAL;
+          } else {
+            if (ISNAN(OUTPUT_I)) continue;
+            if (INPUT_I > OUTPUT_I) OUTPUT_I = INPUT_I;
+          }
+          HIT_I = 1;
+        }
+
+        if (default_res != R_NegInf) {
+          FILL_OUTPUT
+        }
+      }
+
+      break;
+    }
+    case 7:  // last
+    {
+      if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
         int *output = ((int **) res)[j];
         int *input = ((int **) value_var)[j];
 
-        char *hit = (char *) calloc(n_row_output, sizeof(char));
-
-        if (na_rm[j]) {
-          LOOP_OVER_ROWS {
-            // this exploits that NA_LOGICAL := NA_INTEGER
-            if (input[i] == NA_INTEGER) continue;
-            if (hit[map_input_rows_to_output_rows[i]]) {
-              if (input[i] > output[map_input_rows_to_output_rows[i]]) {
-                output[map_input_rows_to_output_rows[i]] = input[i];
-              }
-            } else {
-              output[map_input_rows_to_output_rows[i]] = input[i];
-              hit[map_input_rows_to_output_rows[i]] = 1;
-            }
-          }
-        } else {
-          LOOP_OVER_ROWS {
-            if (hit[map_input_rows_to_output_rows[i]]) {
-              if (input[i] == NA_INTEGER ||
-                  (output[map_input_rows_to_output_rows[i]] != NA_INTEGER &&
-                  input[i] > output[map_input_rows_to_output_rows[i]])) {
-                output[map_input_rows_to_output_rows[i]] = input[i];
-              }
-            } else {
-              output[map_input_rows_to_output_rows[i]] = input[i];
-              hit[map_input_rows_to_output_rows[i]] = 1;
-            }
-          }
+        LOOP_OVER_ROWS {
+          if (na_rm[j] && input[i] == NA_INTEGER) continue;
+          OUTPUT_I = input[i];
         }
-
-        free(hit);
-      } else if ((typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) &&
-        typeof_res[j] == REALSXP) {
-        double *output = ((double **) res)[j];
-        int *input = ((int **) value_var)[j];
-
-        char *hit = (char *) calloc(n_row_output, sizeof(char));
-
-        if (na_rm[j]) {
-          LOOP_OVER_ROWS {
-            // this exploits that NA_LOGICAL := NA_INTEGER
-            if (input[i] == NA_INTEGER) continue;
-            if (hit[map_input_rows_to_output_rows[i]]) {
-              if (input[i] > output[map_input_rows_to_output_rows[i]]) {
-                output[map_input_rows_to_output_rows[i]] = input[i];
-              }
-            } else {
-              output[map_input_rows_to_output_rows[i]] = input[i];
-              hit[map_input_rows_to_output_rows[i]] = 1;
-            }
-          }
-        } else {
-          LOOP_OVER_ROWS {
-            if (hit[map_input_rows_to_output_rows[i]]) {
-              if (input[i] != NA_INTEGER) {
-                if(!ISNAN(output[map_input_rows_to_output_rows[i]]) &&
-                   input[i] > output[map_input_rows_to_output_rows[i]]) {
-                  output[map_input_rows_to_output_rows[i]] = input[i];
-                }
-              } else {
-                output[map_input_rows_to_output_rows[i]] = NA_REAL;
-              }
-            } else {
-              if (input[i] != NA_INTEGER) {
-                output[map_input_rows_to_output_rows[i]] = input[i];
-              } else {
-                output[map_input_rows_to_output_rows[i]] = NA_REAL;
-              }
-              hit[map_input_rows_to_output_rows[i]] = 1;
-            }
-          }
-        }
-
-        free(hit);
       } else if (typeof_value_var[j] == REALSXP) {
         double *output = ((double **) res)[j];
         double *input = ((double **) value_var)[j];
 
-        char *hit = (char *) calloc(n_row_output, sizeof(char));
+        LOOP_OVER_ROWS {
+          if (na_rm[j] && ISNAN(input[i])) continue;
+          OUTPUT_I = input[i];
+        }
+      } else if (typeof_value_var[j] == STRSXP) {
+        int *output = ((int **) res)[j];
+        SEXP *input = ((SEXP **) value_var)[j];
 
         LOOP_OVER_ROWS {
-          if (ISNAN(input[i])) {
-            if (na_rm[j]) {
-              continue;
-            } else {
-              output[map_input_rows_to_output_rows[i]] = NA_REAL;
-              hit[map_input_rows_to_output_rows[i]] = 1;
-            }
-          } else if (hit[map_input_rows_to_output_rows[i]]) {
-            if (!ISNAN(output[map_input_rows_to_output_rows[i]]) &&
-                input[i] > output[map_input_rows_to_output_rows[i]]) {
-              output[map_input_rows_to_output_rows[i]] = input[i];
-            }
+          if (na_rm[j] && input[i] == NA_STRING) continue;
+          OUTPUT_I = i;
+        }
+      }
+
+      break;
+    }
+    case 8: // sample
+    {
+      void *input = value_var[j];
+
+      struct uniqueN_data *uniqueN_data =
+        (struct uniqueN_data *) malloc(map_output_cols_to_input_rows_lengths[j] * sizeof(struct uniqueN_data));
+
+      int (*hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
+      int (*hist_value)[n_bucket] = malloc(sizeof(int[n_pass_value][n_bucket]));
+      memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
+      memset(hist_value, 0, n_pass_value * n_bucket * sizeof(int));
+
+      int uniqueN_data_length = 0;
+      double zero = 0;
+      LOOP_OVER_ROWS {
+        if (na_rm[j] && ISNA_INPUT_I) continue;
+
+        (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
+        if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
+          (uniqueN_data + uniqueN_data_length)->value = ((int *) input)[i];
+        } else if (typeof_value_var[j] == REALSXP) {
+          if (((double *) input)[i] == 0) {
+            (uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(zero);
           } else {
-            output[map_input_rows_to_output_rows[i]] = input[i];
-            hit[map_input_rows_to_output_rows[i]] = 1;
+            (uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(((double *) input)[i]);
           }
+        } else if (typeof_value_var[j] == STRSXP) {
+          (uniqueN_data + uniqueN_data_length)->value = i;
         }
 
-        free(hit);
+        for (int jj = 0; jj < n_pass_rank; jj++) {
+          hist_rank[jj][(uniqueN_data + uniqueN_data_length)->rank >> jj * shift & mask]++;
+        }
+        for (int jj = 0; jj < n_pass_value; jj++) {
+          hist_value[jj][(uniqueN_data + uniqueN_data_length)->value >> jj * shift & mask]++;
+        }
+
+        uniqueN_data_length++;
       }
+
+      if (uniqueN_data_length > 0) {
+        //isort(uniqueN_data, uniqueN_data_length);
+        rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value);
+        //qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_data), uniqueN_int_cmp);
+
+        pthread_mutex_lock(&rng_mutex);
+
+        int cntr = 1;
+        if (typeof_value_var[j] == REALSXP) {
+          double *output = ((double **) res)[j];
+          for (int i = 1; i < uniqueN_data_length; i ++) {
+            if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
+              cntr++;
+            } else {
+              output[(uniqueN_data + i - 1)->rank] = *(double *) &(uniqueN_data + i - 1 - (int) R_unif_index(cntr))->value;
+              cntr = 1;
+            }
+          }
+          output[(uniqueN_data + uniqueN_data_length - 1)->rank] = *(double *) &(uniqueN_data + uniqueN_data_length - 1 - (int) R_unif_index(cntr))->value;
+        } else if (typeof_value_var[j] == LGLSXP || typeof_value_var[j] == INTSXP) {
+          int *output = ((int **) res)[j];
+          for (int i = 1; i < uniqueN_data_length; i ++) {
+            if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
+              cntr++;
+            } else {
+              output[(uniqueN_data + i - 1)->rank] = *(long *) &(uniqueN_data + i - 1 - (int) R_unif_index(cntr))->value;
+              cntr = 1;
+            }
+          }
+          output[(uniqueN_data + uniqueN_data_length - 1)->rank] = *(long *) &(uniqueN_data + uniqueN_data_length - 1 - (int) R_unif_index(cntr))->value;
+        } else if (typeof_value_var[j] == STRSXP) {
+          int *output = ((int **) res)[j];
+          for (int i = 1; i < uniqueN_data_length; i ++) {
+            if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
+              cntr++;
+            } else {
+              output[(uniqueN_data + i - 1)->rank] = *(long *) &(uniqueN_data + i - 1 - (int) R_unif_index(cntr))->value;
+              cntr = 1;
+            }
+          }
+          output[(uniqueN_data + uniqueN_data_length - 1)->rank] = *(long *) &(uniqueN_data + uniqueN_data_length - 1 - (int) R_unif_index(cntr))->value;
+        }
+
+        pthread_mutex_unlock(&rng_mutex);
+      }
+
+      free(uniqueN_data);
+      free(hist_rank);
+      free(hist_value);
+
 
       break;
     }
     }
   }
 
+  free(hit);
   return NULL;
 }
 
@@ -1013,7 +709,12 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
 
   void **res_ptr = (void **) R_alloc(LENGTH(res), sizeof(void *));
   for (int i = 0; i < LENGTH(res); i++) {
-    res_ptr[i] = DATAPTR(VECTOR_ELT(res, i));
+    if (TYPEOF(VECTOR_ELT(res, i)) == STRSXP) {
+      res_ptr[i] = R_alloc(INTEGER(n_row_output_SEXP)[0], sizeof(int));
+      memset(res_ptr[i], -1, INTEGER(n_row_output_SEXP)[0] * sizeof(int));
+    } else {
+      res_ptr[i] = DATAPTR(VECTOR_ELT(res, i));
+    }
   }
 
   void **value_var_ptr = (void **) R_alloc(LENGTH(value_var), sizeof(void *));
@@ -1055,6 +756,8 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
 
   struct thread_data td[nthread];
 
+  GetRNGstate();
+
   int failure = 0;
   pthread_t thread_ids[nthread];
   for (int i = 0; i < nthread; i++) {
@@ -1075,7 +778,18 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
     }
   }
 
+  PutRNGstate();
+
   if (failure) error("something went wrong");
+
+  for (int j = 0; j < LENGTH(res); j++) {
+    if (TYPEOF(VECTOR_ELT(res, j)) != STRSXP) continue;
+    int *output = ((int **) res_ptr)[j];
+    for (int i = 0; i < INTEGER(n_row_output_SEXP)[0]; i++) {
+      if (output[i] < 0) continue;
+      SET_STRING_ELT(VECTOR_ELT(res, j), i, STRING_ELT(VECTOR_ELT(value_var, i), output[i]));
+    }
+  }
 
   return res;
 }

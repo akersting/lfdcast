@@ -107,12 +107,22 @@ dcast <- function(X, by, ..., nthread = 2L) {
           default <- Inf
         } else if (fun %in% c("max")) {
           default <- -Inf
+        } else if (fun %in% c("last", "sample")) {
+          if (is.logical(X[[vvar]])) {
+            default <- NA
+          } else if (is.integer(X[[vvar]])) {
+            default <- NA_integer_
+          } else if (is.numeric(X[[vvar]])) {
+            default <- NA_real_
+          } else if (is.character(X[[vvar]])) {
+            default <- NA_character_
+          }
         } else {
           stop("invalid 'fun.aggregate - value.var' combination found")
         }
       }
 
-      if (fun %in% c("min", "max")) {
+      if (fun %in% c("min", "max", "last", "sample")) {
         attribs <- attributes(X[[vvar]])
       } else {
         attribs <- NULL
@@ -142,7 +152,7 @@ dcast <- function(X, by, ..., nthread = 2L) {
       value_var <- X[[vvar]]
       if (is.character(value_var)) value_var <- enc2utf8(value_var)
 
-      agg <- match(fun, c("count", "existence", "sum", "uniqueN", "min", "max"))
+      agg <- match(fun, c("count", "existence", "sum", "uniqueN", "min", "max", "last", "sample"))
 
       arg_list_for_core <- c(
         agg = list(c(arg_list_for_core[["agg"]], rep(agg, length(res)))),
@@ -155,10 +165,20 @@ dcast <- function(X, by, ..., nthread = 2L) {
   }
 
   # map output cols to threads (0-based)
-  cols_split <- split(seq(0L, length.out = length(arg_list_for_core[["res"]])),
-                      rep_len(seq_len(nthread),
-                              length(arg_list_for_core[["res"]])
-                      )[sample.int(length(arg_list_for_core[["res"]]))])
+  seq_along_res <- seq(0L, length.out = length(arg_list_for_core[["res"]]))
+  if (nthread > 1L) {
+    rng_cols_idx <- arg_list_for_core$agg %in% c(8L)
+    rng_cols <- seq_along_res[rng_cols_idx]
+    non_rng_cols <- seq_along_res[!rng_cols_idx]
+    cols_split <- split(non_rng_cols,
+                        rep_len(seq_len(nthread), length(non_rng_cols)
+                        )[sample.int(length(non_rng_cols))])
+    if (length(rng_cols) > 0L) {
+      cols_split <- c(list(rng_cols), cols_split)
+    }
+  } else {
+    cols_split <- list(seq_along_res)
+  }
 
   arg_list_for_core <- c(
     "lfdcast",
@@ -167,7 +187,7 @@ dcast <- function(X, by, ..., nthread = 2L) {
     map_input_rows_to_output_rows = list(map_input_rows_to_output_rows),
     cols_split = list(cols_split),
     n_row_output_SEXP = n_row_output,
-    nthread_SEXP = min(as.integer(nthread), length(cols_split)),
+    nthread_SEXP = length(cols_split),
     PACKAGE = "lfdcast"
   )
 
