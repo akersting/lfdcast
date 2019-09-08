@@ -2,4 +2,5 @@
 
 export(dcast)
 export(make_cast_args)
+export(register_fun.aggregate)
 useDynLib(lfdcast)

@@ -152,7 +152,7 @@ dcast <- function(X, by, ..., nthread = 2L) {
       value_var <- X[[vvar]]
       if (is.character(value_var)) value_var <- enc2utf8(value_var)
 
-      agg <- match(fun, c("count", "existence", "sum", "uniqueN", "min", "max", "last", "sample"))
+      agg <- fun.aggregates[fun]
 
       arg_list_for_core <- c(
         agg = list(c(arg_list_for_core[["agg"]], rep(agg, length(res)))),
@@ -167,7 +167,7 @@ dcast <- function(X, by, ..., nthread = 2L) {
   # map output cols to threads (0-based)
   seq_along_res <- seq(0L, length.out = length(arg_list_for_core[["res"]]))
   if (nthread > 1L) {
-    rng_cols_idx <- arg_list_for_core$agg %in% c(8L)
+    rng_cols_idx <- names(arg_list_for_core$agg) %in% c("sample")
     rng_cols <- seq_along_res[rng_cols_idx]
     non_rng_cols <- seq_along_res[!rng_cols_idx]
     cols_split <- split(non_rng_cols,
