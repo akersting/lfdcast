@@ -1,12 +1,13 @@
 #include "lfdcast.h"
 
-int sum_(void *res, int typeof_res, void *value_var, int typeof_value_var,
-         int na_rm, int *input_rows_in_output_col, int n_input_rows_in_output_col,
-         int *map_input_rows_to_output_rows, int n_row_output, int *hit) {
+int sum_(void *restrict res, const int typeof_res, const void *restrict value_var,
+         const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
+         const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
+         const int n_row_output, int *restrict hit) {
 
   if (typeof_res == INTSXP) {
-    int *output = (int *) res;
-    int *input = (int *) value_var;
+    int *restrict output = (int *) res;
+    const int *restrict input = (int *) value_var;
 
     int default_res = output[0];
     if (default_res != 0) {
@@ -29,8 +30,8 @@ int sum_(void *res, int typeof_res, void *value_var, int typeof_value_var,
     }
 
   } else {
-    void *input = value_var;
-    double *output = (double *) res;
+    const void *restrict input = value_var;
+    double *restrict output = (double *) res;
 
     double default_res = output[0];
     if (default_res != 0) {

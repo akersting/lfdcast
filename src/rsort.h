@@ -15,9 +15,9 @@ struct uniqueN_data {
   uint64_t value;
 };
 
-void rsort(struct uniqueN_data *x,
+void rsort(struct uniqueN_data *restrict x,
            int n,
-           int hist_rank[][n_bucket],
-           int hist_value[][n_bucket]);
+           int hist_rank[restrict][n_bucket],
+           int hist_value[restrict][n_bucket]);
 
 #endif

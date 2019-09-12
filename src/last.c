@@ -1,20 +1,21 @@
 #include "lfdcast.h"
 
-int last_(void *res, int typeof_res, void *value_var, int typeof_value_var,
-          int na_rm, int *input_rows_in_output_col, int n_input_rows_in_output_col,
-          int *map_input_rows_to_output_rows, int n_row_output, int *hit) {
+int last_(void *restrict res, const int typeof_res, const void *restrict value_var,
+          const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
+          const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
+          const int n_row_output, int *restrict hit) {
 
   if (typeof_value_var == LGLSXP || typeof_value_var == INTSXP) {
-    int *output = (int *) res;
-    int *input = (int *) value_var;
+    int *restrict output = (int *) res;
+    const int *restrict input = (int *) value_var;
 
     LOOP_OVER_ROWS {
       if (na_rm && input[i] == NA_INTEGER) continue;
       OUTPUT_I = input[i];
     }
   } else if (typeof_value_var == REALSXP) {
-    double *output = (double *) res;
-    double *input = (double *) value_var;
+    double *restrict output = (double *) res;
+    const double *restrict input = (double *) value_var;
 
     LOOP_OVER_ROWS {
       if (na_rm && ISNAN(input[i])) continue;

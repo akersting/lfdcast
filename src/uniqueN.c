@@ -1,18 +1,19 @@
 #include "lfdcast.h"
 #include "rsort.h"
 
-int uniqueN_(void *res, int typeof_res, void *value_var, int typeof_value_var,
-             int na_rm, int *input_rows_in_output_col, int n_input_rows_in_output_col,
-             int *map_input_rows_to_output_rows, int n_row_output, int *hit) {
+int uniqueN_(void *restrict res, const int typeof_res, const void *restrict value_var,
+             const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
+             const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
+             const int n_row_output, int *restrict hit) {
 
-  int *output = (int *) res;
-  void *input = value_var;
+  int *restrict output = (int *) res;
+  const void *restrict input = value_var;
 
-  struct uniqueN_data *uniqueN_data =
+  struct uniqueN_data * restrict uniqueN_data =
     (struct uniqueN_data *) malloc(n_input_rows_in_output_col * sizeof(struct uniqueN_data));
 
-  int (*hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
-  int (*hist_value)[n_bucket] = malloc(sizeof(int[n_pass_value][n_bucket]));
+  int (*restrict hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
+  int (*restrict hist_value)[n_bucket] = malloc(sizeof(int[n_pass_value][n_bucket]));
   memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
   memset(hist_value, 0, n_pass_value * n_bucket * sizeof(int));
 
@@ -26,9 +27,11 @@ int uniqueN_(void *res, int typeof_res, void *value_var, int typeof_value_var,
       (uniqueN_data + uniqueN_data_length)->value = ((int *) input)[i];
     } else if (typeof_value_var == REALSXP) {
       if (((double *) input)[i] == 0) {
-        (uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(zero);
+        memcpy(&(uniqueN_data + uniqueN_data_length)->value, &zero, sizeof(double));
+        //(uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(zero);
       } else {
-        (uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(((double *) input)[i]);
+        memcpy(&(uniqueN_data + uniqueN_data_length)->value, ((double *) input) + i, sizeof(double));
+        //(uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(((double *) input)[i]);
       }
     } else if (typeof_value_var == STRSXP) {
       (uniqueN_data + uniqueN_data_length)->value = ((intptr_t *) input)[i];
@@ -54,8 +57,11 @@ int uniqueN_(void *res, int typeof_res, void *value_var, int typeof_value_var,
     if (typeof_value_var == REALSXP) {
       for (int i = 1; i < uniqueN_data_length; i ++) {
         if ((uniqueN_data + i)->rank == (uniqueN_data + i - 1)->rank) {
-          double v = *(double *) &(uniqueN_data + i)->value;
-          double vp = *(double *) &(uniqueN_data + i - 1)->value;
+          double v, vp;
+          memcpy(&v, &(uniqueN_data + i)->value, sizeof(double));
+          memcpy(&vp, &(uniqueN_data + i - 1)->value, sizeof(double));
+          //double v = *(double *) &(uniqueN_data + i)->value;
+          //double vp = *(double *) &(uniqueN_data + i - 1)->value;
           if ((ISNA(v) != ISNA(vp)) ||
               (R_IsNaN(v) != R_IsNaN(vp)) ||
               (!ISNAN(v) && !ISNAN(vp) && (v != vp))) {

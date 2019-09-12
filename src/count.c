@@ -1,11 +1,12 @@
 #include "lfdcast.h"
 
-int count_(void *res, int typeof_res, void *value_var, int typeof_value_var,
-           int na_rm, int *input_rows_in_output_col, int n_input_rows_in_output_col,
-           int *map_input_rows_to_output_rows, int n_row_output, int *hit) {
+int count_(void *restrict res, const int typeof_res, const void *restrict value_var,
+           const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
+           const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
+           const int n_row_output, int *restrict hit) {
 
-  int *output = (int *) res;
-  void *input = value_var;
+  int *restrict output = (int *) res;
+  const void *restrict input = value_var;
 
   int default_res = output[0];
   if (default_res != 0) {

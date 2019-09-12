@@ -1,10 +1,13 @@
 #ifndef LFDCAST_H
 #define LFDCAST_H
 
+typedef int (*lfdcast_agg_fun_t)(void *restrict res, const int typeof_res, const void *restrict value_var,
+             const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
+             const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
+             const int n_row_output, int *restrict hit);
+
 struct lfdcast_agg {
-   int (*fun)(void *res, int typeof_res, void *value_var, int typeof_value_var,
-        int na_rm, int *input_rows_in_output_col, int n_input_rows_in_output_col,
-        int *map_input_rows_to_output_rows, int n_row_output, int *hit);
+   lfdcast_agg_fun_t fun;
 };
 
 #define INPUT_I                                                \

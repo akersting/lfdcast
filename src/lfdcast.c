@@ -7,9 +7,7 @@
 
 
 struct thread_data {
-  int (**agg)(void *res, int typeof_res, void *value_var, int typeof_value_var,
-        int na_rm, int *input_rows_in_output_col, int n_input_rows_in_output_col,
-        int *map_input_rows_to_output_rows, int n_row_output, int *hit);
+  lfdcast_agg_fun_t *agg;
   void **value_var;
   int *typeof_value_var;
   int *typeof_res;
@@ -28,9 +26,7 @@ pthread_mutex_t rng_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void *lfdcast_core(void *td_void) {
   struct thread_data *td = (struct thread_data *) td_void;
-  int (**agg)(void *res, int typeof_res, void *value_var, int typeof_value_var,
-        int na_rm, int *input_rows_in_output_col, int n_input_rows_in_output_col,
-        int *map_input_rows_to_output_rows, int n_row_output, int *hit) = td->agg;
+  lfdcast_agg_fun_t *agg = td->agg;
   void **value_var = td->value_var;
   int *typeof_value_var = td->typeof_value_var;
   int *typeof_res = td->typeof_res;
@@ -99,11 +95,7 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
     map_output_cols_to_input_rows_ptr[i] = INTEGER(VECTOR_ELT(map_output_cols_to_input_rows, i));
   }
 
-  int (**agg_ptr)(void *res, int typeof_res, void *value_var, int typeof_value_var,
-       int na_rm, int *input_rows_in_output_col, int n_input_rows_in_output_col,
-       int *map_input_rows_to_output_rows, int n_row_output, int *hit) = (int (**)(void *res, int typeof_res, void *value_var, int typeof_value_var,
-                                                                          int na_rm, int *input_rows_in_output_col, int n_input_rows_in_output_col,
-                                                                          int *map_input_rows_to_output_rows, int n_row_output, int *hit)) R_alloc(LENGTH(agg), sizeof(int (*)));
+  lfdcast_agg_fun_t *agg_ptr = (lfdcast_agg_fun_t *) R_alloc(LENGTH(agg), sizeof(lfdcast_agg_fun_t *));
   for (int i = 0; i < LENGTH(agg); i++) {
     agg_ptr[i] = ((struct lfdcast_agg *) R_ExternalPtrAddr(VECTOR_ELT(agg, i)))->fun;
   }
