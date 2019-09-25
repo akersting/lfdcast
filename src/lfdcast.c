@@ -159,10 +159,11 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
 
 
 SEXP get_row_ranks_unique_pos(SEXP x_SEXP, SEXP res_SEXP) {
-  int *x = INTEGER(x_SEXP);
-  int *res = INTEGER(res_SEXP);
+  int *restrict x = INTEGER(x_SEXP);
+  int *restrict res = INTEGER(res_SEXP);
 
-  for (int i = 0; i < LENGTH(x_SEXP); i++) {
+  int n = LENGTH(x_SEXP);
+  for (int i = 0; i < n; i++) {
     res[x[i]] = i + 1;
   }
 
