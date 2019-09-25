@@ -1,7 +1,9 @@
 #' @export
 make_cast_args <- function(to, fun.aggregate, value.var, fill = NULL,
+                           fun.post = NULL,
                            to.keep = NULL, subset = NULL, na.rm = FALSE,
                            sep = "_") {
+
   list(
     to = to,
     fun.aggregate = fun.aggregate,
@@ -12,6 +14,13 @@ make_cast_args <- function(to, fun.aggregate, value.var, fill = NULL,
       as.list(rep(fill, length(value.var)))
     } else {
       fill
+    },
+    fun.post = if (is.null(fun.post)) {
+      rep(list(list(NULL)), length(value.var))
+    } else if (is.list(fun.post) && !is.list(fun.post[[1L]])) {
+      rep(list(fun.post), length(value.var))
+    } else {
+      fun.post
     },
     to.keep = to.keep,
     subset = subset,
@@ -24,20 +33,22 @@ make_cast_args <- function(to, fun.aggregate, value.var, fill = NULL,
 #' @export
 dcast <- function(X, by, ..., nthread = 2L) {
 
-  map_input_rows_to_output_rows <-
+  frankv_job <- parallel::mcparallel(
     data.table::frankv(X, cols = by, na.last = FALSE,
                        ties.method = "dense") - 1L  # 0-based
-  n_row_output <- max(map_input_rows_to_output_rows) + 1L
+  )
 
   args <- list(...)
 
   arg_list_for_core <- list()
+  arg_list_fun_post <- list()
 
   for (i in seq_along(args)) {
     to <- args[[i]][["to"]]
     fun.aggregate <- args[[i]][["fun.aggregate"]]
     value.var <- args[[i]][["value.var"]]
     fill <- args[[i]][["fill"]]
+    fun.post <- args[[i]]["fun.post"]
     to.keep <- args[[i]][["to.keep"]]
     subset <- args[[i]][["subset"]]
     na.rm <- args[[i]][["na.rm"]]
@@ -60,8 +71,6 @@ dcast <- function(X, by, ..., nthread = 2L) {
       X_first_row_of_col_grp <- data.table::setDT(
         X[col_order[col_grp_starts], to, drop = FALSE])
 
-      col_grp_starts <- c(col_grp_starts, nrow(X) + 1L)  # might be double (OK)
-
       if (!is.null(to.keep)) {
         this_to.keep <-
           data.table:::merge.data.table(X_first_row_of_col_grp,
@@ -74,67 +83,102 @@ dcast <- function(X, by, ..., nthread = 2L) {
         this_to.keep <- rep(TRUE, nrow(X_first_row_of_col_grp))
       }
 
+      col_grp_starts <- c(col_grp_starts, nrow(X) + 1L)  # might be double (OK)
       map_output_cols_to_input_rows <-
         lapply(which(this_to.keep), function(s) {
           res <- col_order[seq(col_grp_starts[s], col_grp_starts[s + 1L] - 1L)]
-          res[rows2keep[res]] - 1L
+          res[rows2keep[res]] - 1L  # 0-based
         })
       n_col_output <- length(map_output_cols_to_input_rows)
 
-    } else {
-      map_output_cols_to_input_rows <- list(which(rows2keep) - 1L)
+    } else {  # by only
+      map_output_cols_to_input_rows <- list(which(rows2keep) - 1L)  # 0-based
       n_col_output <- 1L
       this_to.keep <- TRUE
     }
 
     for (j in seq_along(fun.aggregate)) {
       fun <- fun.aggregate[j]
-      vvar <- value.var[j]
 
-      if (!is.null(fill[[j]])) {
-        default <- fill[[j]]
-      } else {
-        value_var_bare <- unclass(X[[vvar]])
-        if (fun %in% c("existence")) {
-          default <- FALSE
-        } else if (fun %in% c("count", "uniqueN") ||
-                   (fun == "sum" && is.logical(value_var_bare))) {
-          default <- 0L
-        } else if (fun %in% c() ||
-                   (fun == "sum" && is.numeric(value_var_bare))) {
-          default <- 0
-        } else if (fun %in% c("min")) {
-          default <- Inf
-        } else if (fun %in% c("max")) {
-          default <- -Inf
-        } else if (fun %in% c("last", "sample")) {
-          if (is.logical(X[[vvar]])) {
-            default <- NA
-          } else if (is.integer(X[[vvar]])) {
-            default <- NA_integer_
-          } else if (is.numeric(X[[vvar]])) {
-            default <- NA_real_
-          } else if (is.character(X[[vvar]])) {
-            default <- NA_character_
-          }
+      if (is.list(value.var)) {
+        if (typeof(value.var[[j]]) %in% c("language", "symbol")) {
+          value_var <- eval(value.var[[j]], X, enclos = parent.frame())
+        } else if (typeof(value.var[[j]]) == "expression") {
+          value_var <- eval(value.var[[j]][[1L]], X, enclos = parent.frame())
         } else {
-          stop("invalid 'fun.aggregate - value.var' combination found")
+          value_var <- X[[value.var[[j]]]]
+        }
+      } else {
+        if (typeof(value.var) %in% c("language", "symbol")) {
+          value_var <- eval(value.var, X, enclos = parent.frame())
+        } else if (typeof(value.var) == "expression") {
+          value_var <- eval(value.var[[1L]], X, enclos = parent.frame())
+        } else {
+          value_var <- X[[value.var[j]]]
         }
       }
+      stopifnot(length(value_var) == nrow(X))
+      support <- getSupport(supports[[fun.aggregate]], fun.aggregate, value_var)
 
-      if (fun %in% c("min", "max", "last", "sample")) {
-        attribs <- attributes(X[[vvar]])
+      if (!is.null(fill[[j]])) {
+        if (!storage.mode(fill[[j]]) %in% support[["fill.storage.modes"]]) {
+          if (storage.mode(fill[[j]]) %in% support[["convert.fill.from"]]) {
+            default <- switch(support[["fill.storage.modes"]][1L],
+              logical = as.logical(fill[[j]]),
+              integer = as.integer(fill[[j]]),
+              double = as.double(fill[[j]]),
+              charcter = as.character(fill[[j]])
+            )
+          } else {
+            stop("unsupported storage mode of 'fill'")
+          }
+        } else {
+          default <- fill[[j]]
+        }
+      } else {
+        default <- support[["fill.default"]]
+        # if (fun %in% c("existence")) {
+        #   default <- FALSE
+        # } else if (fun %in% c("count", "uniqueN") ||
+        #            (fun == "sum" && is.logical(value_var))) {
+        #   default <- 0L
+        # } else if (fun %in% c() ||
+        #            (fun == "sum" && is.numeric(value_var))) {
+        #   default <- 0
+        # } else if (fun %in% c("min")) {
+        #   default <- Inf
+        # } else if (fun %in% c("max")) {
+        #   default <- -Inf
+        # } else if (fun %in% c("last", "sample")) {
+        #   if (is.logical(value_var)) {
+        #     default <- NA
+        #   } else if (is.integer(value_var)) {
+        #     default <- NA_integer_
+        #   } else if (is.numeric(value_var)) {
+        #     default <- NA_real_
+        #   } else if (is.character(value_var)) {
+        #     default <- NA_character_
+        #   }
+        # } else {
+        #   stop("invalid 'fun.aggregate - value.var' combination found")
+        # }
+      }
+
+      if (isTRUE(support[["keep.attr"]])) {
+        attribs <- attributes(value_var)
+      } else if (!isFALSE(support[["keep.attr"]])) {
+        attribs <- attributes(value_var)[support[["keep.attr"]]]
       } else {
         attribs <- NULL
       }
 
       res <- lapply(seq_len(sum(!is.na(this_to.keep))),
-                    function(i, x, times, attribs) {
-                      col <- rep.int(x, times)
+                    function(i, x, attribs) {
+                      col <- x
                       attributes(col) <- attribs
                       col
                     },
-                    x = default, times = n_row_output, attribs = attribs)
+                    x = default, attribs = attribs)
 
 
       if (length(to) > 0L) {
@@ -148,8 +192,6 @@ dcast <- function(X, by, ..., nthread = 2L) {
       }
 
       names(res) <- res_names
-
-      value_var <- X[[vvar]]
       if (is.character(value_var)) value_var <- enc2utf8(value_var)
 
       agg <- fun.aggregates[fun]
@@ -161,6 +203,8 @@ dcast <- function(X, by, ..., nthread = 2L) {
         map_output_cols_to_input_rows = list(c(arg_list_for_core[["map_output_cols_to_input_rows"]], map_output_cols_to_input_rows)),
         res = list(c(arg_list_for_core[["res"]], res))
       )
+
+      arg_list_fun_post <- c(arg_list_fun_post, rep(fun.post[[j]], length(res)))
     }
   }
 
@@ -180,9 +224,13 @@ dcast <- function(X, by, ..., nthread = 2L) {
     cols_split <- list(seq_along_res)
   }
 
+  map_input_rows_to_output_rows <- parallel::mccollect(frankv_job)[[1L]]
+  n_row_output <- max(map_input_rows_to_output_rows) + 1L
+
   arg_list_for_core <- c(
     "lfdcast",
-    arg_list_for_core,
+    arg_list_for_core[c("agg", "value_var", "na_rm", "map_output_cols_to_input_rows")],
+    res = list(lapply(arg_list_for_core[["res"]], function(col) rep(col, n_row_output))),
     lengths_map_output_cols_to_input_rows = list(unlist(lapply(arg_list_for_core[["map_output_cols_to_input_rows"]], length))),
     map_input_rows_to_output_rows = list(map_input_rows_to_output_rows),
     cols_split = list(cols_split),
@@ -192,6 +240,12 @@ dcast <- function(X, by, ..., nthread = 2L) {
   )
 
   res <- do.call(.Call, arg_list_for_core)
+  for (j in seq_along(res)) {
+    if (!is.null(arg_list_fun_post[[j]][[1L]])) {
+      res[[j]] <- do.call(arg_list_fun_post[[j]][[1L]],
+                          c(list(res[[j]]), arg_list_fun_post[[j]][-1L]))
+    }
+  }
 
   # row_ranks_unique_pos <- which(!duplicated(map_input_rows_to_output_rows, nmax = n_row_output))
   row_ranks_unique_pos <- .Call("get_row_ranks_unique_pos",
@@ -200,7 +254,8 @@ dcast <- function(X, by, ..., nthread = 2L) {
                                 PACKAGE = "lfdcast")
   row_ranks_unique <- map_input_rows_to_output_rows[row_ranks_unique_pos]
   row_ranks_unique_pos_ordered <- row_ranks_unique_pos[order(row_ranks_unique)]
-  id_cols <- X[row_ranks_unique_pos_ordered, by, drop = FALSE]
+
+  id_cols <- lapply(X[by], function(col) col[row_ranks_unique_pos_ordered])
 
   if (data.table::is.data.table(X)) {
     res <- data.table::setDT(c(id_cols, res))
