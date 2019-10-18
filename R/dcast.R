@@ -1,37 +1,65 @@
-#' @export
-make_cast_args <- function(to, fun.aggregate, value.var, fill = NULL,
-                           fun.post = NULL,
-                           to.keep = NULL, subset = NULL, na.rm = FALSE,
-                           sep = "_") {
-
-  list(
-    to = to,
-    fun.aggregate = fun.aggregate,
-    value.var = value.var,
-    fill = if (is.null(fill)) {
-      vector("list", length(value.var))
-    } else if (length(fill) == 1L) {
-      as.list(rep(fill, length(value.var)))
-    } else {
-      fill
-    },
-    fun.post = if (is.null(fun.post)) {
-      rep(list(list(NULL)), length(value.var))
-    } else if (is.list(fun.post) && !is.list(fun.post[[1L]])) {
-      rep(list(fun.post), length(value.var))
-    } else {
-      fun.post
-    },
-    to.keep = to.keep,
-    subset = subset,
-    na.rm = if (length(na.rm) == 1L) rep(na.rm, length(value.var)) else na.rm,
-    sep = if (length(sep) == 1L) rep(sep, length(value.var)) else sep
-  )
-}
-
+#' Data Frame Casting
+#'
+#' @param X the data frame to cast.
+#' @param by a character vector with one or more column names of \code{X} to
+#'   group by (the left hand side of the forumla in
+#'   \code{reshape2::\link[reshape2]{dcast}}/\code{data.table::\link[data.table]{dcast}}).
+#'
+#'
+#'
+#'
+#' @param ... for \code{dcast}, one or more objects as returned by \code{agg}.
+#'
+#'   For \code{agg}, one or more unquoted expressions, each containing exactly
+#'   one call to an aggregation function like \code{\bold{g}sum}. These
+#'   expressions are evaluated in three stages:
+#'
+#'   \bold{First}, the expression \code{x} passed as the first argument to the
+#'   aggregation function is evaluated in the context of the data frame
+#'   \code{X}. (See explanation on \code{x} below.) \bold{Second}, the
+#'   aggregation function is called on all subsets (as defined by \code{by},
+#'   \code{to}, \code{to.keep} and \code{subset}) of the vector resulting from
+#'   the first stage. \bold{Third}, the complete expression is evaluated once
+#'   for each corresponding \emph{result} column with the call to the
+#'   aggregation function being replaced by the results of the aggregation
+#'   function for this column.
+#'
+#'   In the simplest case such a \code{...}-expression is just the call to the
+#'   aggregation function, in which case there is no third stage.
+#' @param to a character vector with zero, one or more column names of \code{X}
+#'   by which to spread \code{X} (the right hand side of the forumla in
+#'   \code{reshape2::\link[reshape2]{dcast}}/\code{data.table::\link[data.table]{dcast}}).
+#'
+#'
+#'
+#'
+#' @param to.keep a data.frame with one or more of the columns given as
+#'   \code{to}: keep only result columns corresponding to combinations of values
+#'   on the \code{to} columns that are contained in \code{to.keep}.
+#' @param subset a quoted expression which is evaluated in the context of
+#'   \code{X} and must return a logical vector of length \code{nrow(X)}
+#'   indicating for each row of \code{X} whether it should be passed to the
+#'   aggregation function or not.
+#' @param to2char vectorized function which is called with with the \code{k}
+#'   columns (each of length \code{n}) mentioned in \code{to} as the first
+#'   \code{k} arguments. It must return a character vector of length \code{n},
+#'   which is used as (part of) the column names of the result. This function is
+#'   only called if \code{length(to) > 0}.
+#' @param to2char.args a list with additional arguments to pass to
+#'   \code{to2char}.
+#' @param names4res a vectorized function which is called with the name of the
+#'   current \code{...}-argument of \code{agg} as the first argument and with
+#'   the result returned by \code{to2char} as the second argument. It must
+#'   return a character vector of the same length as its second argument, which
+#'   is used as the column names of the result. This function is only called if
+#'   the \code{...}-arguments are named and if \code{length(to) > 0}.
+#' @param names4res.args a list with additional arguments to pass to
+#'   \code{names4res}.
+#' @param nthread \emph{a hint} to the function on how many threads to use.
+#'
 #' @useDynLib lfdcast
 #' @export
-dcast <- function(X, by, ..., nthread = 2L) {
+dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
 
   frankv_job <- parallel::mcparallel(
     data.table::frankv(X, cols = by, na.last = FALSE,
@@ -41,18 +69,20 @@ dcast <- function(X, by, ..., nthread = 2L) {
   args <- list(...)
 
   arg_list_for_core <- list()
-  arg_list_fun_post <- list()
+  post_expr_list <- list()
 
   for (i in seq_along(args)) {
     to <- args[[i]][["to"]]
     fun.aggregate <- args[[i]][["fun.aggregate"]]
     value.var <- args[[i]][["value.var"]]
     fill <- args[[i]][["fill"]]
-    fun.post <- args[[i]]["fun.post"]
+    post.expr <- args[[i]][["post.expr"]]
+    post.expr_pos <- args[[i]][["post.expr_pos"]]
+    names.fun <- args[[i]][["names.fun"]]
+    names.fun.args <- args[[i]][["names.fun.args"]]
     to.keep <- args[[i]][["to.keep"]]
     subset <- args[[i]][["subset"]]
     na.rm <- args[[i]][["na.rm"]]
-    sep <- args[[i]][["sep"]]
 
     if (length(subset) > 0L) {
       rows2keep <- eval(subset, X, enclos = parent.frame())
@@ -98,27 +128,17 @@ dcast <- function(X, by, ..., nthread = 2L) {
     }
 
     for (j in seq_along(fun.aggregate)) {
-      fun <- fun.aggregate[j]
+      fun <- fun.aggregate[[j]]
 
-      if (is.list(value.var)) {
-        if (typeof(value.var[[j]]) %in% c("language", "symbol")) {
-          value_var <- eval(value.var[[j]], X, enclos = parent.frame())
-        } else if (typeof(value.var[[j]]) == "expression") {
-          value_var <- eval(value.var[[j]][[1L]], X, enclos = parent.frame())
-        } else {
-          value_var <- X[[value.var[[j]]]]
-        }
+      if (is.symbol(value.var[[j]]) && as.character(value.var[[j]]) %in% names(X)) {
+        value_var <- X[[as.character(value.var[[j]])]]
       } else {
-        if (typeof(value.var) %in% c("language", "symbol")) {
-          value_var <- eval(value.var, X, enclos = parent.frame())
-        } else if (typeof(value.var) == "expression") {
-          value_var <- eval(value.var[[1L]], X, enclos = parent.frame())
-        } else {
-          value_var <- X[[value.var[j]]]
-        }
+        value_var <- eval(value.var[[j]], X, enclos = parent.frame())
       }
+
+
       stopifnot(length(value_var) == nrow(X))
-      support <- getSupport(supports[[fun.aggregate]], fun.aggregate, value_var)
+      support <- getSupport(supports[[fun]], fun, value_var)
 
       if (!is.null(fill[[j]])) {
         if (!storage.mode(fill[[j]]) %in% support[["fill.storage.modes"]]) {
@@ -137,31 +157,6 @@ dcast <- function(X, by, ..., nthread = 2L) {
         }
       } else {
         default <- support[["fill.default"]]
-        # if (fun %in% c("existence")) {
-        #   default <- FALSE
-        # } else if (fun %in% c("count", "uniqueN") ||
-        #            (fun == "sum" && is.logical(value_var))) {
-        #   default <- 0L
-        # } else if (fun %in% c() ||
-        #            (fun == "sum" && is.numeric(value_var))) {
-        #   default <- 0
-        # } else if (fun %in% c("min")) {
-        #   default <- Inf
-        # } else if (fun %in% c("max")) {
-        #   default <- -Inf
-        # } else if (fun %in% c("last", "sample")) {
-        #   if (is.logical(value_var)) {
-        #     default <- NA
-        #   } else if (is.integer(value_var)) {
-        #     default <- NA_integer_
-        #   } else if (is.numeric(value_var)) {
-        #     default <- NA_real_
-        #   } else if (is.character(value_var)) {
-        #     default <- NA_character_
-        #   }
-        # } else {
-        #   stop("invalid 'fun.aggregate - value.var' combination found")
-        # }
       }
 
       if (isTRUE(support[["keep.attr"]])) {
@@ -180,38 +175,63 @@ dcast <- function(X, by, ..., nthread = 2L) {
                     },
                     x = default, attribs = attribs)
 
+      # if (length(to) > 0L) {
+      #   res_names <- do.call(to2char, c(unname(X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE]), to2char.args))
+      #   if (!is.null(names(post.expr))) {
+      #     res_names <- do.call(names4res, c(names(post.expr)[j], list(res_names), names4res.args))
+      #   }
+      # } else {
+      #   res_names <- names(post.expr)[j]
+      # }
 
-      if (length(to) > 0L) {
-        res_names <- do.call(paste, c(unname(X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE]), sep = sep[j]))
-        if (!is.null(names(fun.aggregate)))
-          res_names <- paste(names(fun.aggregate)[j], res_names, sep = sep[j])
-        if (!is.null(names(args)))
-          res_names <- paste(names(args)[i], res_names, sep = sep[j])
-      } else {
-        res_names <- names(fun.aggregate)[j]
-      }
+      res_names <- do.call(names.fun,
+                           c(e.name = if (!is.null(names(post.expr)[j]) && nchar(names(post.expr)[j]) > 0) {
+                             list(names(post.expr)[j])
+                           } else {
+                             NULL
+                           },
+                           to.cols = if (length(to) > 0) {
+                             list(X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE])
+                           } else {
+                             NULL
+                           },
+                           names.fun.args))
+      # res_names <- make.cnames(e.name = names(post.expr)[j],
+      #                          to.cols = if (length(to) > 0) {
+      #                            X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE]
+      #                          } else {
+      #                            NULL
+      #                          },
+      #                          sep = "_", prefix.with.colname = FALSE)
 
       names(res) <- res_names
       if (is.character(value_var)) value_var <- enc2utf8(value_var)
 
       agg <- fun.aggregates[fun]
+      rng <- fun.aggregates_rng[[fun]]
 
       arg_list_for_core <- c(
         agg = list(c(arg_list_for_core[["agg"]], rep(agg, length(res)))),
+        rng = list(c(arg_list_for_core[["rng"]], rep(rng, length(res)))),
         value_var = list(c(arg_list_for_core[["value_var"]], lapply(seq_len(length(res)), function(i) value_var))),
-        na_rm = list(c(arg_list_for_core[["na_rm"]], rep(na.rm[j], length(res)))),
+        na_rm = list(c(arg_list_for_core[["na_rm"]], rep(na.rm[[j]], length(res)))),
         map_output_cols_to_input_rows = list(c(arg_list_for_core[["map_output_cols_to_input_rows"]], map_output_cols_to_input_rows)),
         res = list(c(arg_list_for_core[["res"]], res))
       )
 
-      arg_list_fun_post <- c(arg_list_fun_post, rep(fun.post[[j]], length(res)))
+      post_expr_list <- c(post_expr_list,
+                          rep(list(list(expr = post.expr[[j]],
+                                        expr_pos = post.expr_pos[[j]])),
+                              length(res)))
     }
   }
 
   # map output cols to threads (0-based)
   seq_along_res <- seq(0L, length.out = length(arg_list_for_core[["res"]]))
   if (nthread > 1L) {
-    rng_cols_idx <- names(arg_list_for_core$agg) %in% c("sample")
+    #rng_cols_idx <- names(arg_list_for_core$agg) %in% c("sample")
+    # funs which make use of rng must all be called from the same thread (1)
+    rng_cols_idx <- arg_list_for_core$rng
     rng_cols <- seq_along_res[rng_cols_idx]
     non_rng_cols <- seq_along_res[!rng_cols_idx]
     cols_split <- split(non_rng_cols,
@@ -239,11 +259,19 @@ dcast <- function(X, by, ..., nthread = 2L) {
     PACKAGE = "lfdcast"
   )
 
+  if (assert.valid.names) {
+    valid_names <- make.names(names(arg_list_for_core[["res"]]), unique = TRUE)
+    if (!identical(names(arg_list_for_core[["res"]]), valid_names)) {
+      stop("result has invalid names")
+    }
+  }
   res <- do.call(.Call, arg_list_for_core)
+
   for (j in seq_along(res)) {
-    if (!is.null(arg_list_fun_post[[j]][[1L]])) {
-      res[[j]] <- do.call(arg_list_fun_post[[j]][[1L]],
-                          c(list(res[[j]]), arg_list_fun_post[[j]][-1L]))
+    if (length(post_expr_list[[j]][["expr_pos"]]) > 0L) {
+      e <- new.env(parent = parent.frame())
+      post_expr_list[[j]][["expr"]][[post_expr_list[[j]][["expr_pos"]]]] <- res[[j]]
+      res[[j]] <- eval(post_expr_list[[j]][["expr"]], e)
     }
   }
 
@@ -265,4 +293,89 @@ dcast <- function(X, by, ..., nthread = 2L) {
   }
 
   res
+}
+
+
+#' @rdname dcast
+#' @export
+agg <- function(to, ..., to.keep = NULL, subset = NULL,
+                names.fun = make.cnames,
+                names.fun.args = list(sep = "_", prefix.with.colname = FALSE)) {
+  aggs <- substitute(...())
+  specs <- lapply(aggs, extract_agg_fun)
+
+  na.rm <- lapply(specs, function(spec) if (is.null(s <- spec[["call"]][["na.rm"]])) FALSE else s)
+  fill <- lapply(specs, function(spec) spec[["call"]][["fill"]])
+  value.var <- lapply(specs, function(spec) spec[["call"]][["x"]])
+  fun.aggregate <- lapply(specs, function(spec) spec[["agg_fun"]])
+  post.expr_pos <- lapply(specs, function(spec) spec[["pos"]])
+
+  list(
+    to = to,
+    fun.aggregate = fun.aggregate,
+    value.var = value.var,
+    fill = fill,
+    to.keep = to.keep,
+    subset = subset,
+    na.rm = na.rm,
+    post.expr = as.list(aggs),
+    post.expr_pos = post.expr_pos,
+    names.fun = match.fun(names.fun),
+    names.fun.args = names.fun.args
+  )
+}
+
+#' Extract Details on the Call to an Aggregation Function from an Unevaluated
+#' Expression
+#'
+#' @param x an unevaluate expression
+#' @param agg_funs a character vector with the names of all aggregations
+#'   functions to look for
+#' @param pos internal parameter, which must not be altered.
+#'
+#' @return If a call to an aggregation function was found inside the expression
+#'   \code{x}, a list with the following components is returned: \code{agg_fun} -
+#'   the name of the aggregation function found; \code{call} - the call to the
+#'   aggregation function with all of the specified arguments being specified by
+#'   their full names; \code{pos} - an integer giving the position of the call
+#'   inside the expression \code{x}, i.e. \code{x[[pos]]} is the call to the
+#'   aggregation function. If no call to an aggregation function was found,
+#'   \code{NULL} is returned.
+#'
+#' @keywords internal
+extract_agg_fun <- function(x, agg_funs = names(fun.aggregates), pos = integer()) {
+  if (is.call(x) &&
+      any(idx <- unlist(lapply(agg_funs, function(agg_fun) identical(x[[1L]], as.symbol(agg_fun)))))) {
+    return(list(
+      agg_fun = agg_funs[idx],
+      call = match.call(function(x, na.rm = FALSE, fill = NULL) {}, x),
+      pos = pos
+    ))
+  }
+
+  for (i in seq_along(x)[-1L]) {
+    res <- extract_agg_fun(x[[i]], agg_funs, pos = c(pos, i))
+    if (!is.null(res)) return(res)
+  }
+
+  return(NULL)
+}
+
+make.cnames <- function(e.name, to.cols, sep = "_", prefix.with.colname = FALSE) {
+  if (!missing(to.cols)) {
+    if (prefix.with.colname) {
+      to.cols <- lapply(seq_along(to.cols), function(i) paste(names(to.cols)[i], to.cols[[i]], sep = sep))
+    }
+    res_names <- do.call(paste, c(unname(to.cols), sep = sep))
+
+    if (!missing(e.name)) {
+      res_names <- do.call(paste, c(e.name, list(res_names), sep = sep))
+    }
+  } else if (!missing(e.name)) {
+    res_names <- e.name
+  } else {
+    stop("cannot name result column")
+  }
+
+  res_names
 }

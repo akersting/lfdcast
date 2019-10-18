@@ -1,7 +1,7 @@
 .onLoad <- function(libname, pkgname) {
 
   ptr <- getNativeSymbolInfo("count", "lfdcast")[["address"]]
-  register_fun.aggregate("count", ptr,
+  register_fun.aggregate("glength", ptr,
                          support(
                            class = NULL,
                            storage.mode = c("integer", "logical", "double", "character"),
@@ -12,7 +12,7 @@
                          ))
 
   ptr <- getNativeSymbolInfo("existence", "lfdcast")[["address"]]
-  register_fun.aggregate("existence", ptr,
+  register_fun.aggregate("glength_gt0", ptr,
                          support(
                            class = NULL,
                            storage.mode = c("integer", "logical", "double", "character"),
@@ -23,7 +23,7 @@
                          ))
 
   ptr <- getNativeSymbolInfo("sum", "lfdcast")[["address"]]
-  register_fun.aggregate("sum", ptr,
+  register_fun.aggregate("gsum", ptr,
                          support(
                            class = NA_character_,
                            storage.mode = c("logical"),
@@ -42,7 +42,7 @@
                          ))
 
   ptr <- getNativeSymbolInfo("uniqueN", "lfdcast")[["address"]]
-  register_fun.aggregate("uniqueN", ptr,
+  register_fun.aggregate("guniqueN", ptr,
                          support(
                            class = NULL,
                            storage.mode = c("integer", "logical", "double", "character"),
@@ -53,7 +53,7 @@
                          ))
 
   ptr <- getNativeSymbolInfo("min", "lfdcast")[["address"]]
-  register_fun.aggregate("min", ptr,
+  register_fun.aggregate("gmin", ptr,
                          support(
                            class = c(NA_character_, "Date", "ordered"),
                            storage.mode = c("integer", "logical"),
@@ -71,7 +71,7 @@
                          ))
 
   ptr <- getNativeSymbolInfo("max", "lfdcast")[["address"]]
-  register_fun.aggregate("max", ptr,
+  register_fun.aggregate("gmax", ptr,
                          support(
                            class = c(NA_character_, "Date", "ordered"),
                            storage.mode = c("integer", "logical"),
@@ -89,7 +89,7 @@
                          ))
 
   ptr <- getNativeSymbolInfo("last", "lfdcast")[["address"]]
-  register_fun.aggregate("last", ptr,
+  register_fun.aggregate("glast", ptr,
                          support(
                            class = NULL,
                            storage.mode = c("logical"),
@@ -124,7 +124,7 @@
                          ))
 
   ptr <- getNativeSymbolInfo("sample", "lfdcast")[["address"]]
-  register_fun.aggregate("sample", ptr,
+  register_fun.aggregate("gsample", ptr,
                          support(
                            class = NULL,
                            storage.mode = c("logical"),
@@ -156,10 +156,10 @@
                            fill.storage.modes = c("character"),
                            convert.fill.from = NULL,
                            keep.attr = TRUE
-                         ))
+                         ), rng = TRUE)
 
   ptr <- getNativeSymbolInfo("all", "lfdcast")[["address"]]
-  register_fun.aggregate("all", ptr,
+  register_fun.aggregate("gall", ptr,
                          support(
                            class = NA_character_,
                            storage.mode = c("integer", "logical"),
@@ -170,7 +170,7 @@
                          ))
 
   ptr <- getNativeSymbolInfo("any", "lfdcast")[["address"]]
-  register_fun.aggregate("any", ptr,
+  register_fun.aggregate("gany", ptr,
                          support(
                            class = NA_character_,
                            storage.mode = c("integer", "logical"),
@@ -181,7 +181,7 @@
                          ))
 
   ptr <- getNativeSymbolInfo("mean", "lfdcast")[["address"]]
-  register_fun.aggregate("mean", ptr,
+  register_fun.aggregate("gmean", ptr,
                          support(
                            class = NA_character_,
                            storage.mode = c("logical", "integer", "double"),
@@ -192,7 +192,7 @@
                          ))
 
   ptr <- getNativeSymbolInfo("median", "lfdcast")[["address"]]
-  register_fun.aggregate("median", ptr,
+  register_fun.aggregate("gmedian", ptr,
                          support(
                            class = NA_character_,
                            storage.mode = c("logical", "integer", "double"),
@@ -203,5 +203,78 @@
                          ))
 }
 
+#' Aggregate by Taking the Length
+#'
+#' @param x an expression to be evaluated in the context of the data frame
+#'   \code{X} to cast and resulting in an atomic vector of length
+#'   \code{nrow(X)}. In the simplest case this is
+#'   just an unqoted column name of the data frame \code{X}.
+#' @param na.rm should \code{NA}s be removed from the vector resulting from the
+#'   evaluation of \code{x} before applying the aggregation
+#'   function to it?
+#' @param fill value with which to fill empty cells in the result.
+#'
 #' @export
-SUM__ <- function(x, na.rm, fill) stop("eee")
+glength <- function(x, na.rm = FALSE, fill = 0L)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' @rdname glength
+#' @export
+glength_gt0 <- function(x, na.rm = FALSE, fill = FALSE)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' Aggregate Numeric Vectors by Summing
+#' @inheritParams glength
+#' @export
+gsum <- function(x, na.rm = FALSE, fill = 0)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' Aggregate by Counting Unique Elements
+#' @inheritParams  glength
+#' @export
+guniqueN <- function(x, na.rm = FALSE, fill = 0L)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' Aggregate Numeric Vectors by Taking Maxima/Minima
+#' @inheritParams glength
+#' @export
+gmax <- function(x, na.rm = FALSE, fill = -Inf)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' @rdname gmax
+#' @export
+gmin <- function(x, na.rm = FALSE, fill = Inf)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' Aggregate by Selecting one Element
+#' @inheritParams glength
+#' @export
+glast <- function(x, na.rm = FALSE, fill = NA)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' @rdname glast
+#' @export
+gsample <- function(x, na.rm = FALSE, fill = NA)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' Aggregate Logical Vectors by Any/All
+#' @inheritParams glength
+#' @export
+gany <- function(x, na.rm = FALSE, fill = FALSE)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' @rdname gany
+#' @export
+gall <- function(x, na.rm = FALSE, fill = TRUE)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' Aggregate Numeric Vectors by Averaging
+#' @inheritParams glength
+#' @export
+gmean <- function(x, na.rm = FALSE, fill = NaN)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' @rdname gmean
+#' @export
+gmedian <- function(x, na.rm = FALSE, fill = NA_real_)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
