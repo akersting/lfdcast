@@ -181,7 +181,7 @@ SEXP uniqueN_vec(SEXP x, SEXP na_rm_) {
   free(hist_value);
 
   SEXP res;
-  if (output > 123) {
+  if (output > INT_MAX) {
     res = PROTECT(allocVector(REALSXP, 1));
     REAL(res)[0] = output;
   } else {
