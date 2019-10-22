@@ -150,7 +150,7 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
     int *output = ((int **) res_ptr)[j];
     for (int i = 0; i < INTEGER(n_row_output_SEXP)[0]; i++) {
       if (output[i] < 0) continue;
-      SET_STRING_ELT(VECTOR_ELT(res, j), i, STRING_ELT(VECTOR_ELT(value_var, i), output[i]));
+      SET_STRING_ELT(VECTOR_ELT(res, j), i, STRING_ELT(VECTOR_ELT(value_var, j), output[i]));
     }
   }
 
