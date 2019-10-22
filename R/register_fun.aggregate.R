@@ -1,3 +1,4 @@
+# nocov start
 fun.aggregates <- list()
 fun.aggregates_rng <- list()
 supports <- list()
@@ -7,6 +8,7 @@ supports <- list()
 #' @param name the name of the aggregation function
 #' @param ptr the external pointer to the function
 #' @param ... on or more objects as returned by \code{support}
+#' @param rng does this function make use of the R random number generator?
 #' @export
 register_fun.aggregate <- function(name, ptr, ..., rng = FALSE) {
   fun.aggregates[[name]] <<- ptr
@@ -41,6 +43,7 @@ support <- function(class, storage.mode, fill.default, fill.storage.modes,
        convert.fill.from = convert.fill.from,
        keep.attr = keep.attr)
 }
+# nocov end
 
 #' Find the Best Fitting Support Declaration
 #'

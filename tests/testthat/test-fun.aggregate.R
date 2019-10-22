@@ -3,7 +3,7 @@ test_fun.aggregate <- function(fun, value.var, fill, na.rm,
                                map_input_rows_to_output_rows) {
 
   if (missing(input_rows_in_output_col)) {
-    input_rows_in_output_col <- seq_along(value.var)[sample.int(length(value.var), size = sample.int(length(value.var)))]
+    input_rows_in_output_col <- sort(seq_along(value.var)[sample.int(length(value.var), size = sample.int(length(value.var)))])
   }
 
   if (missing(map_input_rows_to_output_rows)) {
@@ -11,13 +11,26 @@ test_fun.aggregate <- function(fun, value.var, fill, na.rm,
   }
 
   agg <- lfdcast:::fun.aggregates[fun]
-  res <- data.frame(rep(fill, length(value.var)))
+
+  if (fun == "glast" && is.character(value.var)) {
+    res <- data.frame(rep(-1L, length(value.var)), stringsAsFactors = FALSE)
+    names(res) <- "rep.fill..length.value.var.."
+  } else {
+    res <- data.frame(rep(fill, length(value.var)), stringsAsFactors = FALSE)
+  }
 
   res <- .Call("test_fun_aggregate", agg, res, value.var, na.rm,
-        as.integer(input_rows_in_output_col) - 1L,
-        as.integer(map_input_rows_to_output_rows) - 1L, PACKAGE = "lfdcast")
+               as.integer(input_rows_in_output_col) - 1L,
+               as.integer(map_input_rows_to_output_rows) - 1L, PACKAGE = "lfdcast")
 
-  res2 <- data.frame(rep(fill, length(value.var)))
+  if (fun == "glast" && is.character(value.var)) {
+    r <- res[[1L]]
+    r[res[[1L]] == -1] <- fill
+    r[res[[1L]] != -1] <- value.var[res[[1]] + 1L]
+    res[[1L]] <- r
+  }
+
+  res2 <- data.frame(rep(fill, length(value.var)), stringsAsFactors = FALSE)
 
   if (na.rm) {
     input_rows_in_output_col <- input_rows_in_output_col[!is.na(value.var[input_rows_in_output_col])]
@@ -27,103 +40,353 @@ test_fun.aggregate <- function(fun, value.var, fill, na.rm,
 
   for (i_output in unique(map_input_rows_to_output_rows)) {
     switch(fun,
-      count = res2[i_output, 1] <- sum(map_input_rows_to_output_rows == i_output),
-      existence = res2[i_output, 1] <- TRUE,
-      sum = res2[i_output, 1] <- sum(value.var[map_input_rows_to_output_rows == i_output]),
-      max = res2[i_output, 1] <- min(value.var[map_input_rows_to_output_rows == i_output]),
-      uniqueN = res2[i_output, 1] <- data.table::uniqueN(value.var[map_input_rows_to_output_rows == i_output]),
-      last = res2[i_output, 1] <- data.table::last(value.var[map_input_rows_to_output_rows == i_output]),
-      any = res2[i_output, 1] <- any(value.var[map_input_rows_to_output_rows == i_output]),
-      all = res2[i_output, 1] <- all(value.var[map_input_rows_to_output_rows == i_output]),
-      mean = res2[i_output, 1] <- mean(value.var[map_input_rows_to_output_rows == i_output]),
-      median = res2[i_output, 1] <- median(value.var[map_input_rows_to_output_rows == i_output])
+           glength = res2[i_output, 1] <- sum(map_input_rows_to_output_rows == i_output),
+           glength_gt0 = res2[i_output, 1] <- TRUE,
+           gsum = res2[i_output, 1] <- sum(value.var[map_input_rows_to_output_rows == i_output]),
+           gmax = res2[i_output, 1] <- max(value.var[map_input_rows_to_output_rows == i_output]),
+           gmin = res2[i_output, 1] <- min(value.var[map_input_rows_to_output_rows == i_output]),
+           guniqueN = res2[i_output, 1] <- data.table::uniqueN(value.var[map_input_rows_to_output_rows == i_output]),
+           glast = res2[i_output, 1] <- data.table::last(value.var[map_input_rows_to_output_rows == i_output]),
+           gany = res2[i_output, 1] <- any(value.var[map_input_rows_to_output_rows == i_output]),
+           gall = res2[i_output, 1] <- all(value.var[map_input_rows_to_output_rows == i_output]),
+           gmean = res2[i_output, 1] <- mean(value.var[map_input_rows_to_output_rows == i_output]),
+           gmedian = res2[i_output, 1] <- median(value.var[map_input_rows_to_output_rows == i_output])
     )
   }
 
-  if (!(isTRUE(all.equal(res, res2)))) browser()
+  # if (!(isTRUE(all.equal(res, res2)))) {
+  #   saveRDS(res, "~/res.rds")
+  #   saveRDS(res2, "~/res2.rds")
+  #   saveRDS(value.var, "~/value.var.rds")
+  #   saveRDS(map_input_rows_to_output_rows, "~/map_input_rows_to_output_rows.rds")
+  # }
+  # if (!(isTRUE(all.equal(res, res2)))) browser()
   stopifnot(isTRUE(all.equal(res, res2)))
 }
 
 value.var_char <- lapply(sample.int(5, 1000, replace = TRUE),
-                         function(size) sample(c(letters[1:4], NA_character_), size = size, replace = TRUE))
+                         function(size) sample(c(letters[1:4], NA_character_, ""), size = size, replace = TRUE))
 value.var_int <- lapply(sample.int(5, 1000, replace = TRUE),
-                        function(size) sample(c(1:4, NA_integer_), size = size, replace = TRUE))
+                        function(size) sample(c(1:4, NA_integer_, -.Machine$integer.max, .Machine$integer.max), size = size, replace = TRUE))
 value.var_real <- lapply(sample.int(5, 1000, replace = TRUE),
-                        function(size) sample(c(1, -Inf, Inf, NA_real_, NaN, 0, -0, 0/0), size = size, replace = TRUE))
+                         function(size) sample(c(-99, 1, -Inf, Inf, NA_real_, NaN, 0, -0, 0/0, -NaN, -NA_real_), size = size, replace = TRUE))
 value.var_lgl <- lapply(sample.int(5, 1000, replace = TRUE),
-                         function(size) sample(c(TRUE, FALSE, NA), size = size, replace = TRUE))
+                        function(size) sample(c(TRUE, FALSE, NA), size = size, replace = TRUE))
 
-# count ----
-value.var <- c(value.var_char, value.var_int, value.var_real, value.var_lgl)
-names(value.var) <- seq_along(value.var)
+test_that("glength", {
+  # skip("glength")
+  # length ----
+  value.var <- c(value.var_char, value.var_int, value.var_real, value.var_lgl)
+  names(value.var) <- seq_along(value.var)
 
-test_args_list <- list(
-  fun = list(count = "count"),
-  value.var = value.var,
-  fill = list(int = -6L, NA_int = NA_integer_),
-  na.rm = list(T = TRUE, F = FALSE)
-)
+  test_args_list <- list(
+    fun = list(count = "glength"),
+    value.var = value.var,
+    fill = list(int = -6L, NA_int = NA_integer_),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
 
-set.seed(123)
-fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
-#stopifnot(length(unlist(lapply(lapply(fr, `[[`, i = 1), `[[`, "error"))) == 0L)
-
-fr <- as.data.frame(fr)
-stopifnot(all(is.na(fr$error)))
-
-
-# all ----
-value.var <- c(value.var_int, value.var_lgl)
-names(value.var) <- seq_along(value.var)
-
-test_args_list <- list(
-  fun = list(all = "all"),
-  value.var = value.var,
-  fill = list(T = TRUE, F = FALSE, "NA" = NA),
-  na.rm = list(T = TRUE, F = FALSE)
-)
-
-set.seed(123)
-fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
-# stopifnot(length(unlist(lapply(lapply(fr, `[[`, i = 1), `[[`, "error"))) == 0L)
-
-fr <- as.data.frame(fr)
-stopifnot(all(is.na(fr$error)))
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+})
 
 
-# existence ----
-value.var <- c(value.var_char, value.var_int, value.var_real, value.var_lgl)
-names(value.var) <- seq_along(value.var)
+test_that("glength_gt0", {
+  # skip("glength_gt0")
+  # length_gt0 ----
+  value.var <- c(value.var_char, value.var_int, value.var_real, value.var_lgl)
+  names(value.var) <- seq_along(value.var)
 
-test_args_list <- list(
-  fun = list(count = "existence"),
-  value.var = value.var,
-  fill = list(T = TRUE, F = FALSE, "NA" = NA),
-  na.rm = list(T = TRUE, F = FALSE)
-)
+  test_args_list <- list(
+    fun = list(count = "glength_gt0"),
+    value.var = value.var,
+    fill = list(F = FALSE, NA_lgs = NA),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
 
-set.seed(123)
-fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
-# stopifnot(length(unlist(lapply(lapply(fr, `[[`, i = 1), `[[`, "error"))) == 0L)
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+})
 
-fr <- as.data.frame(fr)
-stopifnot(all(is.na(fr$error)))
-F__(1)
+test_that("gall", {
+  # skip("gall")
+  # all ----
+  value.var <- c(value.var_int, value.var_lgl)
+  names(value.var) <- seq_along(value.var)
 
-# uniqueN ----
-value.var <- c(value.var_char, value.var_int, value.var_real, value.var_lgl)
-names(value.var) <- seq_along(value.var)
+  test_args_list <- list(
+    fun = list(all = "gall"),
+    value.var = value.var,
+    fill = list(T = TRUE, F = FALSE, "NA" = NA),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
 
-test_args_list <- list(
-  fun = list(count = "uniqueN"),
-  value.var = value.var,
-  fill = list(int = 5L, NA_int = NA_integer_),
-  na.rm = list(T = TRUE, F = FALSE)
-)
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+})
 
-set.seed(123)
-fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
-# stopifnot(length(unlist(lapply(lapply(fr, `[[`, i = 1), `[[`, "error"))) == 0L)
+test_that("gany", {
+  # skip("gany")
+  # any ----
+  value.var <- c(value.var_int, value.var_lgl)
+  names(value.var) <- seq_along(value.var)
 
-fr <- as.data.frame(fr)
-stopifnot(all(is.na(fr$error)))
+  test_args_list <- list(
+    fun = list(all = "gany"),
+    value.var = value.var,
+    fill = list(T = TRUE, F = FALSE, "NA" = NA),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+})
+
+#f <- function(n = 2L) FALSE
+#assignInNamespace("cedta", f, "data.table")
+test_that("guniqueN", {
+
+  # uniqueN ----
+  value.var <- c(value.var_char, value.var_int, value.var_real, value.var_lgl)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(count = "guniqueN"),
+    value.var = value.var,
+    fill = list(int = 5L, NA_int = NA_integer_),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+})
+
+test_that("glast", {
+  # skip("glast")
+  # last ----
+  value.var <- c(value.var_char)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(count = "glast"),
+    value.var = value.var,
+    fill = list(d = "def"),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+
+
+
+  value.var <- c(value.var_int)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(count = "glast"),
+    value.var = value.var,
+    fill = list(int = 7L, NA_int = NA_integer_),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+
+
+  value.var <- c(value.var_lgl)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(count = "glast"),
+    value.var = value.var,
+    fill = list(lgl = TRUE, NA_lglt = NA),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+
+
+  value.var <- c(value.var_real)
+  names(value.var) <- seq_along(value.var)
+  test_args_list <- list(
+    fun = list(count = "glast"),
+    value.var = value.var,
+    fill = list(real = 7, NA_real = NA_real_),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+})
+
+
+test_that("gmedian", {
+
+  # median ----
+  value.var <- c(value.var_int, value.var_lgl, value.var_real)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(all = "gmedian"),
+    value.var = value.var,
+    fill = list(NA_real = NA_real_, real = 5, nreal = -10),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+})
+
+
+test_that("gmean", {
+
+  # mean ----
+  value.var <- c(value.var_int, value.var_lgl, value.var_real)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(all = "gmean"),
+    value.var = value.var,
+    fill = list(NA_real = NA_real_, real = 5, nreal = -10, zero = 0),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+})
+
+
+test_that("gmin", {
+
+  # min ----
+  value.var <- c(value.var_int, value.var_lgl)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(all = "gmin"),
+    value.var = value.var,
+    fill = list(NA_int = NA_integer_, int = 5L, nint = -10L),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+
+
+
+  value.var <- c(value.var_int, value.var_lgl, value.var_real)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(all = "gmin"),
+    value.var = value.var,
+    fill = list(NA_real = NA_real_, real = 5, nreal = -10, ninf = -Inf, inf = Inf),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+})
+
+
+
+test_that("gmax", {
+
+  # max ----
+  value.var <- c(value.var_int, value.var_lgl)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(all = "gmax"),
+    value.var = value.var,
+    fill = list(NA_int = NA_integer_, int = 5L, nint = -10L),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+
+
+
+  value.var <- c(value.var_int, value.var_lgl, value.var_real)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(all = "gmax"),
+    value.var = value.var,
+    fill = list(NA_real = NA_real_, real = 5, nreal = -10, ninf = -Inf, inf = Inf),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+})
+
+
+
+test_that("gsum", {
+
+  # sum ----
+  value.var <- c(value.var_lgl)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(all = "gsum"),
+    value.var = value.var,
+    fill = list(NA_int = NA_integer_, int = 5L, nint = -10L, zero = 0L),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+
+
+
+  value.var <- c(value.var_int, value.var_real)
+  names(value.var) <- seq_along(value.var)
+
+  test_args_list <- list(
+    fun = list(all = "gsum"),
+    value.var = value.var,
+    fill = list(NA_real = NA_real_, real = 5, nreal = -10, ninf = -Inf, inf = Inf, zero = 0),
+    na.rm = list(T = TRUE, F = FALSE)
+  )
+
+  set.seed(123)
+  fr <- fuzzr::p_fuzz_function(test_fun.aggregate, test_args_list)
+  fr <- as.data.frame(fr)
+  expect_true(all(is.na(fr$error)))
+})

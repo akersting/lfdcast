@@ -16,3 +16,45 @@
 #     data.table:::dcast.data.table(data.table::as.data.table(X), a + b ~ c + d, fun.aggregate = length)
 #   )
 # })
+
+library(data.table)
+test_that("lfdcast produces same results as data.table by", {
+  iris <- as.data.table(iris)
+  X <- lfdcast::dcast(iris, "Species", agg(NULL,
+                                           S = gsum(Petal.Length),
+                                           M = gmean(Sepal.Length)))
+  assignInNamespace("cedta.override",
+                    "lfdcast",
+                    "data.table")
+  Y <- iris[, .(S = sum(Petal.Length), M = mean(Sepal.Length)), keyby = "Species"]
+  assignInNamespace("cedta.override",
+                    NULL,
+                    "data.table")
+  expect_identical(X, Y)
+})
+
+test_that("lfdcast produces same results as data.table::dcast", {
+  iris <- as.data.table(iris)
+  X <- lfdcast::dcast(iris, "Species", agg("Petal.Width",
+                                           Petal.Length_sum = gsum(Petal.Length),
+                                           Sepal.Length_mean = gmean(Sepal.Length),
+                                           names.fun.args = list(prefix.with.colname = FALSE)))
+  Y <- data.table::dcast(iris, Species ~ Petal.Width,
+                         fun.aggregate = list(sum, mean),
+                         value.var = list("Petal.Length", "Sepal.Length"),
+                         drop = TRUE)
+  expect_identical(X, Y)
+
+
+  iris[["Species"]] <- as.character(iris[["Species"]])
+  X <- lfdcast::dcast(iris, "Species", agg("Petal.Width",
+                                           Petal.Length_sum = gsum(Petal.Length),
+                                           Sepal.Length_mean = gmean(Sepal.Length),
+                                           Species.1_last = glast(Species),
+                                           names.fun.args = list(prefix.with.colname = FALSE)))
+  Y <- data.table::dcast(iris, Species ~ Petal.Width,
+                         fun.aggregate = list(sum, mean, last),
+                         value.var = list("Petal.Length", "Sepal.Length", "Species"),
+                         drop = TRUE)
+  expect_identical(X, Y)
+})

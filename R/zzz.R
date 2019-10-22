@@ -1,3 +1,4 @@
+# nocov start
 .onLoad <- function(libname, pkgname) {
 
   ptr <- getNativeSymbolInfo("count", "lfdcast")[["address"]]
@@ -278,3 +279,5 @@ gmean <- function(x, na.rm = FALSE, fill = NaN)
 #' @export
 gmedian <- function(x, na.rm = FALSE, fill = NA_real_)
   stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+# nocov end
