@@ -15,7 +15,6 @@ int sample_(void *restrict res, const int typeof_res, const void *restrict value
   memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
 
   int uniqueN_data_length = 0;
-  double zero = 0;
   LOOP_OVER_ROWS {
     if (na_rm && ISNA_INPUT_I) continue;
 
@@ -23,13 +22,7 @@ int sample_(void *restrict res, const int typeof_res, const void *restrict value
     if (typeof_value_var == LGLSXP || typeof_value_var == INTSXP) {
       (uniqueN_data + uniqueN_data_length)->value = ((int *) input)[i];
     } else if (typeof_value_var == REALSXP) {
-      if (((double *) input)[i] == 0) {
-        memcpy(&(uniqueN_data + uniqueN_data_length)->value, &zero, sizeof(double));
-        //(uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(zero);
-      } else {
-        memcpy(&(uniqueN_data + uniqueN_data_length)->value, ((double *) input) + i, sizeof(double));
-        //(uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(((double *) input)[i]);
-      }
+      memcpy(&(uniqueN_data + uniqueN_data_length)->value, ((double *) input) + i, sizeof(double));
     } else if (typeof_value_var == STRSXP) {
       (uniqueN_data + uniqueN_data_length)->value = i;
     }
