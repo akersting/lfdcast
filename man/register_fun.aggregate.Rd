@@ -17,6 +17,8 @@ support(class, storage.mode, fill.default, fill.storage.modes,
 
 \item{...}{on or more objects as returned by \code{support}}
 
+\item{rng}{does this function make use of the R random number generator?}
+
 \item{class}{a character vector with the class(es) of inputs to which this
 function can be applied. An \code{NA} elements means that it can be applied
 to unclassed objects. A 0-length value for \code{class} means that all

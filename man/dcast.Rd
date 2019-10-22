@@ -5,11 +5,10 @@
 \alias{agg}
 \title{Data Frame Casting}
 \usage{
-dcast(X, by, ..., nthread = 2L)
+dcast(X, by, ..., assert.valid.names = TRUE, nthread = 2L)
 
-agg(to, ..., to.keep = NULL, subset = NULL, to2char = paste,
-  to2char.args = list(sep = "_"), names4res = paste,
-  names4res.args = list(sep = "_"))
+agg(to, ..., to.keep = NULL, subset = NULL, names.fun = make.cnames,
+  names.fun.args = list(sep1 = "_", prefix.with.colname = FALSE))
 }
 \arguments{
 \item{X}{the data frame to cast.}
@@ -21,8 +20,8 @@ group by (the left hand side of the forumla in
 \item{...}{for \code{dcast}, one or more objects as returned by \code{agg}.
 
   For \code{agg}, one or more unquoted expressions, each containing exactly
-  one call to an aggregation function like \code{\bold{g}sum}. These
-  expressions are evaluated in three stages:
+  one call to an aggregation function like \code{gsum}. These expressions are
+  evaluated in three stages:
 
   \bold{First}, the expression \code{x} passed as the first argument to the
   aggregation function is evaluated in the context of the data frame
@@ -37,11 +36,15 @@ group by (the left hand side of the forumla in
   In the simplest case such a \code{...}-expression is just the call to the
   aggregation function, in which case there is no third stage.}
 
+\item{assert.valid.names}{should an error be thrown if the column names
+of the result are invalid or not unique?}
+
 \item{nthread}{\emph{a hint} to the function on how many threads to use.}
 
 \item{to}{a character vector with zero, one or more column names of \code{X}
 by which to spread \code{X} (the right hand side of the forumla in
-\code{reshape2::\link[reshape2]{dcast}}/\code{data.table::\link[data.table]{dcast}}).}
+\code{reshape2::\link[reshape2]{dcast}} /
+\code{data.table::\link[data.table]{dcast}}).}
 
 \item{to.keep}{a data.frame with one or more of the columns given as
 \code{to}: keep only result columns corresponding to combinations of values
@@ -52,24 +55,17 @@ on the \code{to} columns that are contained in \code{to.keep}.}
 indicating for each row of \code{X} whether it should be passed to the
 aggregation function or not.}
 
-\item{to2char}{vectorized function which is called with with the \code{k}
-columns (each of length \code{n}) mentioned in \code{to} as the first
-\code{k} arguments. It must return a character vector of length \code{n},
-which is used as (part of) the column names of the result. This function is
-only called if \code{length(to) > 0}.}
+\item{names.fun}{vectorized function which is called to generate the column
+names of the result. It must accept at least the two arguments
+\code{e.name} and \code{to.cols}. The former is the name of the current
+\code{...}-argument of \code{agg}, which is missing if it is unnamed. The
+latter is a data.frame with the columns given as the argument \code{to},
+which is missing if \code{length(to) == 0}. It must return a character
+vector of length \code{nrow(to.cols)} or - if that argument is missing - of
+length \code{1}.}
 
-\item{to2char.args}{a list with additional arguments to pass to
-\code{to2char}.}
-
-\item{names4res}{a vectorized function which is called with the name of the
-current \code{...}-argument of \code{agg} as the first argument and with
-the result returned by \code{to2char} as the second argument. It must
-return a character vector of the same length as its second argument, which
-is used as the column names of the result. This function is only called if
-the \code{...}-arguments are named and if \code{length(to) > 0}.}
-
-\item{names4res.args}{a list with additional arguments to pass to
-\code{names4res}.}
+\item{names.fun.args}{a list with additional arguments to pass to
+\code{names.fun}.}
 }
 \description{
 Data Frame Casting

@@ -8,11 +8,16 @@
 #'
 #'
 #'
+#'
+#'
+#'
+#'
+#'
 #' @param ... for \code{dcast}, one or more objects as returned by \code{agg}.
 #'
 #'   For \code{agg}, one or more unquoted expressions, each containing exactly
-#'   one call to an aggregation function like \code{\bold{g}sum}. These
-#'   expressions are evaluated in three stages:
+#'   one call to an aggregation function like \code{gsum}. These expressions are
+#'   evaluated in three stages:
 #'
 #'   \bold{First}, the expression \code{x} passed as the first argument to the
 #'   aggregation function is evaluated in the context of the data frame
@@ -28,7 +33,11 @@
 #'   aggregation function, in which case there is no third stage.
 #' @param to a character vector with zero, one or more column names of \code{X}
 #'   by which to spread \code{X} (the right hand side of the forumla in
-#'   \code{reshape2::\link[reshape2]{dcast}}/\code{data.table::\link[data.table]{dcast}}).
+#'   \code{reshape2::\link[reshape2]{dcast}} /
+#'   \code{data.table::\link[data.table]{dcast}}).
+#'
+#'
+#'
 #'
 #'
 #'
@@ -40,31 +49,30 @@
 #'   \code{X} and must return a logical vector of length \code{nrow(X)}
 #'   indicating for each row of \code{X} whether it should be passed to the
 #'   aggregation function or not.
-#' @param to2char vectorized function which is called with with the \code{k}
-#'   columns (each of length \code{n}) mentioned in \code{to} as the first
-#'   \code{k} arguments. It must return a character vector of length \code{n},
-#'   which is used as (part of) the column names of the result. This function is
-#'   only called if \code{length(to) > 0}.
-#' @param to2char.args a list with additional arguments to pass to
-#'   \code{to2char}.
-#' @param names4res a vectorized function which is called with the name of the
-#'   current \code{...}-argument of \code{agg} as the first argument and with
-#'   the result returned by \code{to2char} as the second argument. It must
-#'   return a character vector of the same length as its second argument, which
-#'   is used as the column names of the result. This function is only called if
-#'   the \code{...}-arguments are named and if \code{length(to) > 0}.
-#' @param names4res.args a list with additional arguments to pass to
-#'   \code{names4res}.
+#' @param names.fun vectorized function which is called to generate the column
+#'   names of the result. It must accept at least the two arguments
+#'   \code{e.name} and \code{to.cols}. The former is the name of the current
+#'   \code{...}-argument of \code{agg}, which is missing if it is unnamed. The
+#'   latter is a data.frame with the columns given as the argument \code{to},
+#'   which is missing if \code{length(to) == 0}. It must return a character
+#'   vector of length \code{nrow(to.cols)} or - if that argument is missing - of
+#'   length \code{1}.
+#' @param names.fun.args a list with additional arguments to pass to
+#'   \code{names.fun}.
+#' @param assert.valid.names should an error be thrown if the column names
+#'   of the result are invalid or not unique?
 #' @param nthread \emph{a hint} to the function on how many threads to use.
 #'
 #' @useDynLib lfdcast
 #' @export
 dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
 
-  frankv_job <- parallel::mcparallel(
-    data.table::frankv(X, cols = by, na.last = FALSE,
-                       ties.method = "dense") - 1L  # 0-based
-  )
+  # frankv_job <- parallel::mcparallel(
+  #   data.table::frankv(X, cols = by, na.last = FALSE,
+  #                      ties.method = "dense") - 1L  # 0-based
+  # )
+  map_input_rows_to_output_rows <- data.table::frankv(X, cols = by, na.last = FALSE,
+                                                      ties.method = "dense") - 1L  # 0-based
 
   args <- list(...)
 
@@ -103,12 +111,12 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
 
       if (!is.null(to.keep)) {
         this_to.keep <-
-          data.table:::merge.data.table(X_first_row_of_col_grp,
-                                        cbind(unique(to.keep),
-                                              "__LFDCAST__KEEP__" = TRUE),
-                                        by = names(to.keep),
-                                        all.x = TRUE,
-                                        sort = FALSE)[["__LFDCAST__KEEP__"]]
+          data.table::merge.data.table(X_first_row_of_col_grp,
+                                       cbind(unique(to.keep),
+                                             "__LFDCAST__KEEP__" = TRUE),
+                                       by = names(to.keep),
+                                       all.x = TRUE,
+                                       sort = FALSE)[["__LFDCAST__KEEP__"]]
       } else {
         this_to.keep <- rep(TRUE, nrow(X_first_row_of_col_grp))
       }
@@ -175,34 +183,20 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
                     },
                     x = default, attribs = attribs)
 
-      # if (length(to) > 0L) {
-      #   res_names <- do.call(to2char, c(unname(X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE]), to2char.args))
-      #   if (!is.null(names(post.expr))) {
-      #     res_names <- do.call(names4res, c(names(post.expr)[j], list(res_names), names4res.args))
-      #   }
-      # } else {
-      #   res_names <- names(post.expr)[j]
-      # }
-
-      res_names <- do.call(names.fun,
-                           c(e.name = if (!is.null(names(post.expr)[j]) && nchar(names(post.expr)[j]) > 0) {
-                             list(names(post.expr)[j])
-                           } else {
-                             NULL
-                           },
-                           to.cols = if (length(to) > 0) {
-                             list(X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE])
-                           } else {
-                             NULL
-                           },
-                           names.fun.args))
-      # res_names <- make.cnames(e.name = names(post.expr)[j],
-      #                          to.cols = if (length(to) > 0) {
-      #                            X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE]
-      #                          } else {
-      #                            NULL
-      #                          },
-      #                          sep = "_", prefix.with.colname = FALSE)
+      res_names <-
+        do.call(names.fun,
+                c(e.name = if (!is.null(names(post.expr)[j]) &&
+                               nchar(names(post.expr)[j]) > 0) {
+                  list(names(post.expr)[j])
+                } else {
+                  NULL
+                },
+                to.cols = if (length(to) > 0) {
+                  list(X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE])
+                } else {
+                  NULL
+                },
+                names.fun.args))
 
       names(res) <- res_names
       if (is.character(value_var)) value_var <- enc2utf8(value_var)
@@ -213,9 +207,11 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
       arg_list_for_core <- c(
         agg = list(c(arg_list_for_core[["agg"]], rep(agg, length(res)))),
         rng = list(c(arg_list_for_core[["rng"]], rep(rng, length(res)))),
-        value_var = list(c(arg_list_for_core[["value_var"]], lapply(seq_len(length(res)), function(i) value_var))),
+        value_var = list(c(arg_list_for_core[["value_var"]],
+                           lapply(seq_len(length(res)), function(i) value_var))),
         na_rm = list(c(arg_list_for_core[["na_rm"]], rep(na.rm[[j]], length(res)))),
-        map_output_cols_to_input_rows = list(c(arg_list_for_core[["map_output_cols_to_input_rows"]], map_output_cols_to_input_rows)),
+        map_output_cols_to_input_rows = list(c(arg_list_for_core[["map_output_cols_to_input_rows"]],
+                                               map_output_cols_to_input_rows)),
         res = list(c(arg_list_for_core[["res"]], res))
       )
 
@@ -244,14 +240,15 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
     cols_split <- list(seq_along_res)
   }
 
-  map_input_rows_to_output_rows <- parallel::mccollect(frankv_job)[[1L]]
+  # map_input_rows_to_output_rows <- parallel::mccollect(frankv_job)[[1L]]
   n_row_output <- max(map_input_rows_to_output_rows) + 1L
 
   arg_list_for_core <- c(
     "lfdcast",
     arg_list_for_core[c("agg", "value_var", "na_rm", "map_output_cols_to_input_rows")],
     res = list(lapply(arg_list_for_core[["res"]], function(col) rep(col, n_row_output))),
-    lengths_map_output_cols_to_input_rows = list(unlist(lapply(arg_list_for_core[["map_output_cols_to_input_rows"]], length))),
+    lengths_map_output_cols_to_input_rows =
+      list(unlist(lapply(arg_list_for_core[["map_output_cols_to_input_rows"]], length))),
     map_input_rows_to_output_rows = list(map_input_rows_to_output_rows),
     cols_split = list(cols_split),
     n_row_output_SEXP = n_row_output,
@@ -260,9 +257,14 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
   )
 
   if (assert.valid.names) {
-    valid_names <- make.names(names(arg_list_for_core[["res"]]), unique = TRUE)
-    if (!identical(names(arg_list_for_core[["res"]]), valid_names)) {
-      stop("result has invalid names")
+    actual_names <- c(by, names(arg_list_for_core[["res"]]))
+    valid_names <- make.names(actual_names, unique = TRUE)
+    if (!identical(actual_names, valid_names)) {
+      stop("result would have invalid or non-unique column names;",
+           " base::make.names would make the following changes: ",
+           paste0(actual_names[actual_names != valid_names], " -> ",
+                  valid_names[actual_names != valid_names], collapse = ", "))
+
     }
   }
   res <- do.call(.Call, arg_list_for_core)
@@ -275,7 +277,8 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
     }
   }
 
-  # row_ranks_unique_pos <- which(!duplicated(map_input_rows_to_output_rows, nmax = n_row_output))
+  # row_ranks_unique_pos <-
+  #   which(!duplicated(map_input_rows_to_output_rows, nmax = n_row_output))
   row_ranks_unique_pos <- .Call("get_row_ranks_unique_pos",
                                 x_SEXP = map_input_rows_to_output_rows,
                                 res_SEXP = rep(NA_integer_, n_row_output),
@@ -300,12 +303,13 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
 #' @export
 agg <- function(to, ..., to.keep = NULL, subset = NULL,
                 names.fun = make.cnames,
-                names.fun.args = list(sep = "_", prefix.with.colname = FALSE)) {
+                names.fun.args = list(sep1 = "_", prefix.with.colname = FALSE)) {
   aggs <- substitute(...())
   specs <- lapply(aggs, extract_agg_fun)
 
-  na.rm <- lapply(specs, function(spec) if (is.null(s <- spec[["call"]][["na.rm"]])) FALSE else s)
-  fill <- lapply(specs, function(spec) spec[["call"]][["fill"]])
+  na.rm <- lapply(specs,
+                  function(spec) if (is.null(s <- spec[["call"]][["na.rm"]])) FALSE else eval(s, envir = parent.frame()))
+  fill <- lapply(specs, function(spec) eval(spec[["call"]][["fill"]], envir = parent.frame()))
   value.var <- lapply(specs, function(spec) spec[["call"]][["x"]])
   fun.aggregate <- lapply(specs, function(spec) spec[["agg_fun"]])
   post.expr_pos <- lapply(specs, function(spec) spec[["pos"]])
@@ -334,8 +338,8 @@ agg <- function(to, ..., to.keep = NULL, subset = NULL,
 #' @param pos internal parameter, which must not be altered.
 #'
 #' @return If a call to an aggregation function was found inside the expression
-#'   \code{x}, a list with the following components is returned: \code{agg_fun} -
-#'   the name of the aggregation function found; \code{call} - the call to the
+#'   \code{x}, a list with the following components is returned: \code{agg_fun}
+#'   - the name of the aggregation function found; \code{call} - the call to the
 #'   aggregation function with all of the specified arguments being specified by
 #'   their full names; \code{pos} - an integer giving the position of the call
 #'   inside the expression \code{x}, i.e. \code{x[[pos]]} is the call to the
@@ -345,7 +349,9 @@ agg <- function(to, ..., to.keep = NULL, subset = NULL,
 #' @keywords internal
 extract_agg_fun <- function(x, agg_funs = names(fun.aggregates), pos = integer()) {
   if (is.call(x) &&
-      any(idx <- unlist(lapply(agg_funs, function(agg_fun) identical(x[[1L]], as.symbol(agg_fun)))))) {
+      any(idx <- unlist(lapply(agg_funs,
+                               function(agg_fun) identical(x[[1L]],
+                                                           as.symbol(agg_fun)))))) {
     return(list(
       agg_fun = agg_funs[idx],
       call = match.call(function(x, na.rm = FALSE, fill = NULL) {}, x),
@@ -361,15 +367,17 @@ extract_agg_fun <- function(x, agg_funs = names(fun.aggregates), pos = integer()
   return(NULL)
 }
 
-make.cnames <- function(e.name, to.cols, sep = "_", prefix.with.colname = FALSE) {
+make.cnames <- function(e.name, to.cols, sep1 = "_", sep2 = sep1, sep3= sep1,
+                        prefix.with.colname = FALSE) {
   if (!missing(to.cols)) {
     if (prefix.with.colname) {
-      to.cols <- lapply(seq_along(to.cols), function(i) paste(names(to.cols)[i], to.cols[[i]], sep = sep))
+      to.cols <- lapply(seq_along(to.cols),
+                        function(i) paste(names(to.cols)[i], to.cols[[i]], sep = sep3))
     }
-    res_names <- do.call(paste, c(unname(to.cols), sep = sep))
+    res_names <- do.call(paste, c(unname(to.cols), sep = sep2))
 
     if (!missing(e.name)) {
-      res_names <- do.call(paste, c(e.name, list(res_names), sep = sep))
+      res_names <- do.call(paste, c(e.name, list(res_names), sep = sep1))
     }
   } else if (!missing(e.name)) {
     res_names <- e.name

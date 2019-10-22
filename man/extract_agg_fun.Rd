@@ -17,8 +17,8 @@ functions to look for}
 }
 \value{
 If a call to an aggregation function was found inside the expression
-  \code{x}, a list with the following components is returned: \code{agg_fun} -
-  the name of the aggregation function found; \code{call} - the call to the
+  \code{x}, a list with the following components is returned: \code{agg_fun}
+  - the name of the aggregation function found; \code{call} - the call to the
   aggregation function with all of the specified arguments being specified by
   their full names; \code{pos} - an integer giving the position of the call
   inside the expression \code{x}, i.e. \code{x[[pos]]} is the call to the
