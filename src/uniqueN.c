@@ -19,6 +19,8 @@ int uniqueN_(void *restrict res, const int typeof_res, const void *restrict valu
 
   int uniqueN_data_length = 0;
   double zero = 0;
+  double na = NA_REAL;
+  double nan = R_NaN;
   LOOP_OVER_ROWS {
     if (na_rm && ISNA_INPUT_I) continue;
 
@@ -29,6 +31,10 @@ int uniqueN_(void *restrict res, const int typeof_res, const void *restrict valu
       if (((double *) input)[i] == 0) {
         memcpy(&(uniqueN_data + uniqueN_data_length)->value, &zero, sizeof(double));
         //(uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(zero);
+      } else if (R_IsNA(((double *) input)[i])) {
+        memcpy(&(uniqueN_data + uniqueN_data_length)->value, &na, sizeof(double));
+      } else if (R_IsNaN(((double *) input)[i])) {
+        memcpy(&(uniqueN_data + uniqueN_data_length)->value, &nan, sizeof(double));
       } else {
         memcpy(&(uniqueN_data + uniqueN_data_length)->value, ((double *) input) + i, sizeof(double));
         //(uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(((double *) input)[i]);
@@ -112,6 +118,8 @@ SEXP uniqueN_vec(SEXP x, SEXP na_rm_) {
 
   R_xlen_t uniqueN_data_length = 0;
   double zero = 0;
+  double na = NA_REAL;
+  double nan = R_NaN;
   for (R_xlen_t i = 0; i < n; i++) {
     if (na_rm && ISNA_INPUT_I) continue;
 
@@ -121,6 +129,10 @@ SEXP uniqueN_vec(SEXP x, SEXP na_rm_) {
       if (((double *) input)[i] == 0) {
         memcpy(&(uniqueN_data + uniqueN_data_length)->value, &zero, sizeof(double));
         //(uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(zero);
+      } else if (R_IsNA(((double *) input)[i])) {
+        memcpy(&(uniqueN_data + uniqueN_data_length)->value, &na, sizeof(double));
+      } else if (R_IsNaN(((double *) input)[i])) {
+        memcpy(&(uniqueN_data + uniqueN_data_length)->value, &nan, sizeof(double));
       } else {
         memcpy(&(uniqueN_data + uniqueN_data_length)->value, ((double *) input) + i, sizeof(double));
         //(uniqueN_data + uniqueN_data_length)->value = *(uint64_t *) &(((double *) input)[i]);
@@ -144,7 +156,7 @@ SEXP uniqueN_vec(SEXP x, SEXP na_rm_) {
     output = 1;
 
     if (typeof_value_var == REALSXP) {
-      for (int i = 1; i < uniqueN_data_length; i ++) {
+      for (int i = 1; i < uniqueN_data_length; i++) {
         double v, vp;
         memcpy(&v, &(uniqueN_data + i)->value, sizeof(double));
         memcpy(&vp, &(uniqueN_data + i - 1)->value, sizeof(double));
