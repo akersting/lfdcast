@@ -58,3 +58,67 @@ test_that("lfdcast produces same results as data.table::dcast", {
                          drop = TRUE)
   expect_identical(X, Y)
 })
+
+test_that("special features of lfdcast work as expected", {
+  iris[["Species"]] <- as.character(iris[["Species"]])
+  X <- lfdcast::dcast(iris, "Species", agg("Petal.Width",
+                                           Petal.Length_sum = gsum(Petal.Length^2, fill = -Inf) > 30,
+                                           Sepal.Length_mean = gmean(Sepal.Length + Sepal.Width, fill = NA),
+                                           Species.1_last = toupper(glast(Species, fill = "")),
+                                           names.fun.args = list(prefix.with.colname = FALSE)))
+
+  iris1 <- data.table::as.data.table(iris)
+  iris1[["Petal.Length"]] <- iris1[["Petal.Length"]]^2
+  sum_fun <- function(x, fill2, na.rm = FALSE) {
+    if (length(x)) {
+      sum(x, na.rm = na.rm)
+    } else {
+      fill2
+    }
+  }
+  Y1 <- data.table::dcast(iris1, Species ~ Petal.Width,
+                          fun.aggregate = sum_fun,
+                          value.var = "Petal.Length",
+                          drop = TRUE, fill2 = -Inf)
+  Y1_post <- lapply(names(Y1)[-1], function(col) Y1[[col]] > 30)
+  Y1 <- c(list(Y1[[1]]), Y1_post)
+
+
+  iris2 <- data.table::as.data.table(iris)
+  iris2[["Sepal.Length"]] <- iris2[["Sepal.Length"]] + iris2[["Sepal.Width"]]
+  mean_fun <- function(x, fill2, na.rm = FALSE) {
+    if (length(x)) {
+      mean(x, na.rm = na.rm)
+    } else {
+      fill2
+    }
+  }
+  Y2 <- data.table::dcast(iris2, Species ~ Petal.Width,
+                          fun.aggregate = mean_fun,
+                          value.var = "Sepal.Length",
+                          drop = TRUE, fill2 = NA_real_)
+  Y2 <- as.list(Y2)
+  #Y2_post <- lapply(names(Y2)[-1], function(col) Y2[[col]] > 30)
+  #Y1 <- data.table::setDT(c(list(Y1[[1]]), Y1_post))
+
+  iris3 <- data.table::as.data.table(iris)
+  last_fun <- function(x, fill2, na.rm = FALSE) {
+    if (length(x)) {
+      data.table::last(x)
+    } else {
+      fill2
+    }
+  }
+  Y3 <- data.table::dcast(iris3, Species ~ Petal.Width,
+                          fun.aggregate = last_fun,
+                          value.var = "Species",
+                          drop = TRUE, fill2 = "")
+  Y3_post <- lapply(names(Y3)[-1], function(col) toupper(Y3[[col]]))
+  Y3 <- c(list(Y3[[1]]), Y3_post)
+
+  Y <- data.table::setDT(c(Y1, Y2[-1L], Y3[-1L]))
+  expect_equivalent(X, Y)
+
+
+
+})
