@@ -101,6 +101,12 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
 
     if (length(subset) > 0L) {
       rows2keep <- eval(subset, X, enclos = parent.frame())
+
+      if (!is.logical(rows2keep) || length(rows2keep) != nrow(X) ||
+          anyNA(rows2keep)) {
+        stop(deparse(subset), " does not evaluate to a logical vector ",
+             "(without missings) of length ", nrow(X), " (= nrow(X)).")
+      }
     } else {
       rows2keep <- rep(TRUE, nrow(X))
     }
@@ -365,7 +371,7 @@ agg <- function(to, ..., to.keep = NULL, subset = NULL,
 #'   their full names; \code{pos} - an integer giving the position of the call
 #'   inside the expression \code{x}, i.e. \code{x[[pos]]} is the call to the
 #'   aggregation function. If no call to an aggregation function was found,
-#'   \code{NULL} is returned.
+#'   an error is signalled.
 #'
 #' @keywords internal
 extract_agg_fun <- function(x, agg_funs = names(fun.aggregates), pos = integer()) {
@@ -385,6 +391,9 @@ extract_agg_fun <- function(x, agg_funs = names(fun.aggregates), pos = integer()
     if (!is.null(res)) return(res)
   }
 
+  if (length(pos) == 0L) {
+    stop(deparse(x), " does not contain a call to an aggregation function.")
+  }
   return(NULL)
 }
 

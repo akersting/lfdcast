@@ -23,7 +23,7 @@ If a call to an aggregation function was found inside the expression
   their full names; \code{pos} - an integer giving the position of the call
   inside the expression \code{x}, i.e. \code{x[[pos]]} is the call to the
   aggregation function. If no call to an aggregation function was found,
-  \code{NULL} is returned.
+  an error is signalled.
 }
 \description{
 Extract Details on the Call to an Aggregation Function from an Unevaluated
