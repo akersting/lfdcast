@@ -189,5 +189,6 @@ SEXP uniqueN_vec(SEXP x, SEXP na_rm_) {
     INTEGER(res)[0] = output;
   }
 
+  UNPROTECT(1);
   return(res);
 }
