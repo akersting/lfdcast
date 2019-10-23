@@ -118,7 +118,10 @@ test_that("special features of lfdcast work as expected", {
 
   Y <- data.table::setDT(c(Y1, Y2[-1L], Y3[-1L]))
   expect_equivalent(X, Y)
+})
 
 
-
+test_that("edgecases work", {
+  expect_silent(lfdcast::dcast(iris, character()))
+  expect_silent(lfdcast::dcast(iris, character(), agg(NULL)))
 })

@@ -66,13 +66,20 @@
 #' @useDynLib lfdcast
 #' @export
 dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
+  if (any(dim(X) == 0L)) {
+    stop("'X' must have a strictly positive number of both rows and columns.")
+  }
 
   # frankv_job <- parallel::mcparallel(
   #   data.table::frankv(X, cols = by, na.last = FALSE,
   #                      ties.method = "dense") - 1L  # 0-based
   # )
-  map_input_rows_to_output_rows <- data.table::frankv(X, cols = by, na.last = FALSE,
-                                                      ties.method = "dense") - 1L  # 0-based
+  if (length(by) > 0L) {
+    map_input_rows_to_output_rows <- data.table::frankv(X, cols = by, na.last = FALSE,
+                                                        ties.method = "dense") - 1L  # 0-based
+  } else {
+    map_input_rows_to_output_rows <- seq(0L, nrow(X) - 1L)
+  }
 
   args <- list(...)
 
@@ -229,7 +236,11 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
     # funs which make use of rng must all be called from the same thread (1)
     rng_cols_idx <- arg_list_for_core$rng
     rng_cols <- seq_along_res[rng_cols_idx]
-    non_rng_cols <- seq_along_res[!rng_cols_idx]
+    if (length(rng_cols_idx) > 0L) {
+      non_rng_cols <- seq_along_res[!rng_cols_idx]
+    } else {
+      non_rng_cols <- integer()
+    }
     cols_split <- split(non_rng_cols,
                         rep_len(seq_len(nthread), length(non_rng_cols)
                         )[sample.int(length(non_rng_cols))])
@@ -267,7 +278,11 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
 
     }
   }
-  res <- do.call(.Call, arg_list_for_core)
+  if (length(arg_list_for_core$res) > 0L) {
+    res <- do.call(.Call, arg_list_for_core)
+  } else {
+    res <- list()
+  }
 
   for (j in seq_along(res)) {
     if (length(post_expr_list[[j]][["expr_pos"]]) > 0L) {
@@ -292,7 +307,13 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
     res <- data.table::setDT(c(id_cols, res))
     data.table::setattr(res, "sorted", by)
   } else {
-    res <- data.table::setDF(c(id_cols, res))
+    # setDF fails for empty list
+    res <- c(id_cols, res)
+    if (length(res) > 0L) {
+      res <- data.table::setDF(res)
+    } else {
+      res <- as.data.frame(res)
+    }
   }
 
   res
