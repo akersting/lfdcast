@@ -207,12 +207,12 @@
 #' Aggregate by Taking the Length
 #'
 #' @param x an expression to be evaluated in the context of the data frame
-#'   \code{X} to cast and resulting in an atomic vector of length
-#'   \code{nrow(X)}. In the simplest case this is
-#'   just an unqoted column name of the data frame \code{X}.
+#'   \code{\link[lfdcast:dcast]{X}} to cast and resulting in an atomic vector of
+#'   length \code{nrow(\link[lfdcast:dcast]{X})}. In the simplest case this is
+#'   just an unquoted column name of the data frame
+#'   \code{\link[lfdcast:dcast]{X}}.
 #' @param na.rm should \code{NA}s be removed from the vector resulting from the
-#'   evaluation of \code{x} before applying the aggregation
-#'   function to it?
+#'   evaluation of \code{x} before applying the aggregation function to it?
 #' @param fill value with which to fill empty cells in the result.
 #'
 #' @export

@@ -28,7 +28,7 @@ register_fun.aggregate <- function(name, ptr, ..., rng = FALSE) {
 #' @param convert.fill.from a (potentially empty) character vector with storage
 #'   mode(s) (distinct from \code{fill.storage.modes}) which should be converted
 #'   to the storage mode \code{fill.storage.modes[1]}
-#' @param keep.attr should the rsulting column(s) get the same attributes as the
+#' @param keep.attr should the resulting column(s) get the same attributes as the
 #'   input column? Can also be a character vector with the names of the
 #'   attributes to keep.
 #'

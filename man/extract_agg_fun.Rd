@@ -8,7 +8,7 @@ Expression}
 extract_agg_fun(x, agg_funs = names(fun.aggregates), pos = integer())
 }
 \arguments{
-\item{x}{an unevaluate expression}
+\item{x}{an unevaluated expression}
 
 \item{agg_funs}{a character vector with the names of all aggregations
 functions to look for}

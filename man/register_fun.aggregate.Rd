@@ -36,7 +36,7 @@ supported for a user-supplied fill value}
 mode(s) (distinct from \code{fill.storage.modes}) which should be converted
 to the storage mode \code{fill.storage.modes[1]}}
 
-\item{keep.attr}{should the rsulting column(s) get the same attributes as the
+\item{keep.attr}{should the resulting column(s) get the same attributes as the
 input column? Can also be a character vector with the names of the
 attributes to keep.}
 }

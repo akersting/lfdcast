@@ -7,14 +7,15 @@
 \usage{
 dcast(X, by, ..., assert.valid.names = TRUE, nthread = 2L)
 
-agg(to, ..., to.keep = NULL, subset = NULL, names.fun = make.cnames,
-  names.fun.args = list(sep1 = "_", prefix.with.colname = FALSE))
+agg(to, ..., to.keep = NULL, subset = NULL, subsetq = NULL,
+  names.fun = make.cnames, names.fun.args = list(sep1 = "_",
+  prefix.with.colname = FALSE))
 }
 \arguments{
 \item{X}{the data frame to cast.}
 
-\item{by}{a character vector with one or more column names of \code{X} to
-group by (the left hand side of the forumla in
+\item{by}{a character vector with zero, one or more column names of \code{X}
+to group by (the left hand side of the formula in
 \code{reshape2::\link[reshape2]{dcast}}/\code{data.table::\link[data.table]{dcast}}).}
 
 \item{...}{for \code{dcast}, one or more objects as returned by \code{agg}.
@@ -23,26 +24,29 @@ group by (the left hand side of the forumla in
   one call to an aggregation function like \code{gsum}. These expressions are
   evaluated in three stages:
 
-  \bold{First}, the expression \code{x} passed as the first argument to the
-  aggregation function is evaluated in the context of the data frame
-  \code{X}. (See explanation on \code{x} below.) \bold{Second}, the
-  aggregation function is called on all subsets (as defined by \code{by},
-  \code{to}, \code{to.keep} and \code{subset}) of the vector resulting from
-  the first stage. \bold{Third}, the complete expression is evaluated once
-  for each corresponding \emph{result} column with the call to the
-  aggregation function being replaced by the results of the aggregation
-  function for this column.
+  \bold{First}, the expression \code{\link[lfdcast:gsum]{x}} passed as the
+  first argument to the aggregation function is evaluated in the context of
+  the data frame \code{X}. \bold{Second}, the aggregation function is called
+  on all subsets (as defined by \code{by}, \code{to}, \code{to.keep} and
+  \code{subset}) of the vector resulting from the first stage. \bold{Third},
+  the complete expression is evaluated once for each corresponding
+  \emph{result} column with the call to the aggregation function being
+  replaced by the results of the aggregation function for this column.
 
   In the simplest case such a \code{...}-expression is just the call to the
-  aggregation function, in which case there is no third stage.}
+  aggregation function, in which case there is no third stage.
 
-\item{assert.valid.names}{should an error be thrown if the column names
-of the result are invalid or not unique?}
+  Instead of specifying an expression containing the call to an aggregation
+  function directly, it is also possible to specify an expression which
+  evaluates to such an expression.}
+
+\item{assert.valid.names}{should an error be thrown if the column names of
+the result are invalid or not unique?}
 
 \item{nthread}{\emph{a hint} to the function on how many threads to use.}
 
 \item{to}{a character vector with zero, one or more column names of \code{X}
-by which to spread \code{X} (the right hand side of the forumla in
+by which to spread \code{X} (the right hand side of the formula in
 \code{reshape2::\link[reshape2]{dcast}} /
 \code{data.table::\link[data.table]{dcast}}).}
 
@@ -50,19 +54,22 @@ by which to spread \code{X} (the right hand side of the forumla in
 \code{to}: keep only result columns corresponding to combinations of values
 on the \code{to} columns that are contained in \code{to.keep}.}
 
-\item{subset}{a quoted expression which is evaluated in the context of
+\item{subset, subsetq}{an expression which is evaluated in the context of
 \code{X} and must return a logical vector of length \code{nrow(X)}
 indicating for each row of \code{X} whether it should be passed to the
-aggregation function or not.}
+aggregation function or not. For \code{subset} the expression must already
+be quoted, while for \code{subsetq} \code{agg} takes care of the quoting.
+Only one of the two arguments may be given.}
 
-\item{names.fun}{vectorized function which is called to generate the column
-names of the result. It must accept at least the two arguments
-\code{e.name} and \code{to.cols}. The former is the name of the current
-\code{...}-argument of \code{agg}, which is missing if it is unnamed. The
-latter is a data.frame with the columns given as the argument \code{to},
-which is missing if \code{length(to) == 0}. It must return a character
-vector of length \code{nrow(to.cols)} or - if that argument is missing - of
-length \code{1}.}
+\item{names.fun}{function which is called to generate the column names of the
+result. It must accept at least the two arguments \code{e.name} and
+\code{to.cols}. The former is the name of the current \code{...}-argument
+of \code{agg}, which is missing if it is unnamed. The latter is a
+data.frame with the columns given as the argument \code{to} (and an
+undefined number of rows), which is missing if \code{length(to) == 0}. It
+must return a character vector of length \code{nrow(to.cols)} or - if that
+argument is missing - of length \code{1}. If both arguments are missing,
+the default function throws an error.}
 
 \item{names.fun.args}{a list with additional arguments to pass to
 \code{names.fun}.}
