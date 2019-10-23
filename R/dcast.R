@@ -328,11 +328,24 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
 
 #' @rdname dcast
 #' @export
-agg <- function(to, ..., to.keep = NULL, subset = NULL,
+agg <- function(to, ..., to.keep = NULL, subset = NULL, subsetq = NULL,
                 names.fun = make.cnames,
                 names.fun.args = list(sep1 = "_", prefix.with.colname = FALSE)) {
   aggs <- substitute(...())
+
   specs <- lapply(aggs, extract_agg_fun)
+  specs <- lapply(seq_along(aggs), function(i, e) {
+    if (is.null(specs[[i]])) {
+      spec <- extract_agg_fun(eval(aggs[[i]], e))
+      if (is.null(spec)) {
+        stop(deparse(aggs[[i]]), " neither is nor evaluates to an expression ",
+             "containing a call to an aggregation function.")
+      }
+      spec
+    } else {
+      specs[[i]]
+    }
+  }, e = parent.frame())
 
   na.rm <- lapply(specs,
                   function(spec) if (is.null(s <- spec[["call"]][["na.rm"]])) FALSE else eval(s, envir = parent.frame()))
@@ -340,6 +353,12 @@ agg <- function(to, ..., to.keep = NULL, subset = NULL,
   value.var <- lapply(specs, function(spec) spec[["call"]][["x"]])
   fun.aggregate <- lapply(specs, function(spec) spec[["agg_fun"]])
   post.expr_pos <- lapply(specs, function(spec) spec[["pos"]])
+
+  subsetq <- substitute(subsetq)
+  if (!is.null(subset) && !is.null(subsetq)) {
+    stop("only one of 'subset' and 'subsetq' can be given.")
+  }
+  if (!is.null(subsetq)) subset <- subsetq
 
   list(
     to = to,
@@ -391,9 +410,6 @@ extract_agg_fun <- function(x, agg_funs = names(fun.aggregates), pos = integer()
     if (!is.null(res)) return(res)
   }
 
-  if (length(pos) == 0L) {
-    stop(deparse(x), " does not contain a call to an aggregation function.")
-  }
   return(NULL)
 }
 
