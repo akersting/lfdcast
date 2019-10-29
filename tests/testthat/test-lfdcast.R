@@ -118,6 +118,25 @@ test_that("special features of lfdcast work as expected", {
 
   Y <- data.table::setDT(c(Y1, Y2[-1L], Y3[-1L]))
   expect_equivalent(X, Y)
+
+
+
+  X <- lfdcast::dcast(as.data.table(iris), "Species",
+                      agg("Species", gsum(Petal.Width),
+                          to.keep = data.frame(Species = "setosa")))
+  Y <- data.table::dcast(as.data.table(iris), Species ~ Species, fun.aggregate = sum, value.var = "Petal.Width")
+  set(Y, j = "versicolor", value = NULL)
+  set(Y, j = "virginica", value = NULL)
+  expect_equal(X, Y)
+
+
+
+  expr <- quote(gsum(Petal.Width))
+  X <- lfdcast::dcast(as.data.table(iris), "Species",
+                      agg("Species", expr, subsetq = Sepal.Width == round(Sepal.Width)), nthread = 1L)
+  Y <- data.table::dcast(as.data.table(iris[iris$Sepal.Width == round(iris$Sepal.Width), , drop = FALSE]),
+                         Species ~ Species, fun.aggregate = sum, value.var = "Petal.Width")
+  expect_equal(X, Y)
 })
 
 
