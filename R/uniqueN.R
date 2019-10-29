@@ -7,5 +7,5 @@
 #'
 #' @export
 uniqueN <- function(x, na.rm = FALSE) {
-  .Call("uniqueN_vec", x, na.rm, PACKAGE = "lfdcast")
+  .Call(C_uniqueN_vec, x, na.rm)
 }

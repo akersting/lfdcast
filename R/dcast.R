@@ -54,7 +54,7 @@
 #'   the result are invalid or not unique?
 #' @param nthread \emph{a hint} to the function on how many threads to use.
 #'
-#' @useDynLib lfdcast
+#' @useDynLib lfdcast, .registration = TRUE, .fixes = "C_"
 #' @export
 dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
   if (any(dim(X) == 0L)) {
@@ -252,7 +252,7 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
   n_row_output <- max(map_input_rows_to_output_rows) + 1L
 
   arg_list_for_core <- c(
-    "lfdcast",
+    list(C_lfdcast),
     arg_list_for_core[c("agg", "value_var", "na_rm", "map_output_cols_to_input_rows")],
     res = list(lapply(arg_list_for_core[["res"]], function(col) rep(col, n_row_output))),
     lengths_map_output_cols_to_input_rows =
@@ -260,8 +260,7 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
     map_input_rows_to_output_rows = list(map_input_rows_to_output_rows),
     cols_split = list(cols_split),
     n_row_output_SEXP = n_row_output,
-    nthread_SEXP = length(cols_split),
-    PACKAGE = "lfdcast"
+    nthread_SEXP = length(cols_split)
   )
 
   if (assert.valid.names) {
@@ -275,6 +274,7 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
 
     }
   }
+
   if (length(arg_list_for_core$res) > 0L) {
     res <- do.call(.Call, arg_list_for_core)
   } else {
@@ -291,10 +291,9 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
 
   # row_ranks_unique_pos <-
   #   which(!duplicated(map_input_rows_to_output_rows, nmax = n_row_output))
-  row_ranks_unique_pos <- .Call("get_row_ranks_unique_pos",
+  row_ranks_unique_pos <- .Call(C_get_row_ranks_unique_pos,
                                 x_SEXP = map_input_rows_to_output_rows,
-                                res_SEXP = rep(NA_integer_, n_row_output),
-                                PACKAGE = "lfdcast")
+                                res_SEXP = rep(NA_integer_, n_row_output))
   row_ranks_unique <- map_input_rows_to_output_rows[row_ranks_unique_pos]
   row_ranks_unique_pos_ordered <- row_ranks_unique_pos[order(row_ranks_unique)]
 

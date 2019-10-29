@@ -1,0 +1,15 @@
+#include "lfdcast.h"
+#include <R_ext/Rdynload.h>
+
+void R_init_lfdcast(DllInfo *info) {
+  static const R_CallMethodDef callMethods[]  = {
+    {"lfdcast", (DL_FUNC) &lfdcast, 10},
+    {"uniqueN_vec", (DL_FUNC) &uniqueN_vec, 2},
+    {"get_row_ranks_unique_pos", (DL_FUNC) &get_row_ranks_unique_pos, 2},
+    {NULL, NULL, 0}
+  };
+
+  R_registerRoutines(info, NULL, callMethods, NULL, NULL);
+  R_useDynamicSymbols(info, TRUE);
+  R_forceSymbols(info, FALSE);
+}
