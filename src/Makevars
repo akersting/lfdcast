@@ -1,3 +1,2 @@
-PKG_CFLAGS = -D_REENTRANT -Wpedantic -std=c11
+PKG_CFLAGS = -D_REENTRANT
 PKG_LIBS = -lpthread
-PKG_CXXFLAGS = -std=c11
