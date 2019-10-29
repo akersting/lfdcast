@@ -1,23 +1,5 @@
-# test_that("lfdcast produces same results as data.table::dcast", {
-#   n <- 1e4
-#
-#   X <- data.table::data.table(
-#     int = sample(c(1:10, NA_integer_), n, replace = TRUE),
-#     num = sample(c(1:10000, NA_real_, NaN, -Inf, Inf), n, replace = TRUE),
-#     char = sample(c(1:10, NA_character_), n, replace = TRUE),
-#     bool = sample(c(TRUE, FALSE, NA), n, replace = TRUE)
-#   )
-#
-#   A <- dcast(X, "int", num = make_cast_args("char", fun.aggregate = c(uniqueN = "uniqueN", min = "min", max = "max", sum = "sum", length = "count", "function" = "existence"), value.var = c("num", "num", "num", "num", "num", "num")))
-#   B <- data.table::dcast(data.table::as.data.table(X), int ~ char, fun.aggregate = list(uniqueN, min, max, sum, length, function(x) length(x) > 0L), value.var = c("num", "num", "num", "num", "num", "num"))
-#
-#   expect_equivalent(
-#     lfdcast(X, c("a", "b"), c("c", "d")),
-#     data.table:::dcast.data.table(data.table::as.data.table(X), a + b ~ c + d, fun.aggregate = length)
-#   )
-# })
-
 library(data.table)
+
 test_that("lfdcast produces same results as data.table by", {
   iris <- as.data.table(iris)
   X <- lfdcast::dcast(iris, "Species", agg(NULL,
@@ -143,4 +125,31 @@ test_that("special features of lfdcast work as expected", {
 test_that("edgecases work", {
   expect_silent(lfdcast::dcast(iris, character()))
   expect_silent(lfdcast::dcast(iris, character(), agg(NULL)))
+})
+
+test_that("correct errors are thrown", {
+  expect_error(lfdcast::dcast(iris, "Species", agg(NULL,
+                                                   col = gsample(Sepal.Length),
+                                                   col = glast(Sepal.Width))),
+               regexp = "result would have invalid or non-unique column names; base::make.names would make the following changes: col -> col\\.1")
+
+  expect_error(lfdcast::dcast(iris, "Species", agg(NULL,
+                                                   gsample(Sepal.Length))))
+
+  expr <- quote(sum(Sepal.Length))
+  expect_error(lfdcast::dcast(iris, "Species", agg(NULL,
+                                                   col = expr)),
+               regexp = "expr neither is nor evaluates to an expression containing a call to an aggregation function")
+
+  expect_error(lfdcast::dcast(iris, "Species", agg(NULL,
+                                                   col = gsum(sum(Sepal.Length)))),
+               regexp = "sum\\(Sepal\\.Length\\) does not evaluate to an atomic vector of length 150 \\(= nrow\\(X\\)\\)")
+
+  expect_error(lfdcast::dcast(iris, "Species", agg(NULL,
+                                                   col = gsum(Sepal.Length), subset = quote(42))),
+               regexp = "42 does not evaluate to a logical vector \\(without missings\\) of length 150 \\(= nrow\\(X\\)\\)")
+
+  expect_error(lfdcast::dcast(iris, "Species", agg(NULL,
+                                                   col = gsum(Species))),
+               regexp = "the aggregation function 'gsum' does not support a value.var of class\\(es\\) 'factor' and storage mode 'integer'")
 })

@@ -1,6 +1,6 @@
-# tests2skip <- c("glength", "glength_gt0", "gall", "gany", "guniqueN",
-#                 "glast", "gmedian", "gmean", "gmin", "gmax", "gsum", "gsample")
-tests2skip <- character()
+tests2skip <- c("glength", "glength_gt0", "gall", "gany", "guniqueN",
+                "glast", "gmedian", "gmean", "gmin", "gmax", "gsum", "gsample")
+#tests2skip <- character()
 
 test_fun.aggregate <- function(fun, value.var, fill, na.rm,
                                input_rows_in_output_col,
