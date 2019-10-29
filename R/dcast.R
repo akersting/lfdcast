@@ -146,10 +146,12 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
         value_var <- X[[as.character(value.var[[j]])]]
       } else {
         value_var <- eval(value.var[[j]], X, enclos = parent.frame())
+        if (!is.atomic(value_var) || length(value_var) != nrow(X)) {
+          stop(deparse(value.var[[j]]), " does not evaluate to an atomic ",
+               "vector of length ", nrow(X), " (= nrow(X)).")
+        }
       }
 
-
-      stopifnot(length(value_var) == nrow(X))
       support <- getSupport(supports[[fun]], fun, value_var)
 
       if (!is.null(fill[[j]])) {

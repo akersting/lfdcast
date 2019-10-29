@@ -88,7 +88,7 @@ getSupport <- function(l, fun.aggregate, value.var) {
     return(as.double(min(class_idx)))
   }))
 
-  if (all(is.na(res))) stop("fun.aggregate '", fun.aggregate,
+  if (all(is.na(res))) stop("the aggregation function '", fun.aggregate,
                             "' does not support a value.var of class(es) '",
                             paste0(class(value.var), collapse = ", "),
                             "' and storage mode '", storage.mode(value.var), "'.")
