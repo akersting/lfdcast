@@ -115,12 +115,12 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
 
       if (!is.null(to.keep)) {
         this_to.keep <-
-          data.table:::merge.data.table(X_first_row_of_col_grp,
-                                        cbind(unique(to.keep),
-                                              "LFDCAST__KEEP__" = TRUE),
-                                        by = names(to.keep),
-                                        all.x = TRUE,
-                                        sort = FALSE)[["LFDCAST__KEEP__"]]
+          merge(X_first_row_of_col_grp,
+                cbind(unique(to.keep),
+                      "LFDCAST__KEEP__" = TRUE),
+                by = names(to.keep),
+                all.x = TRUE,
+                sort = FALSE)[["LFDCAST__KEEP__"]]
       } else {
         this_to.keep <- rep(TRUE, nrow(X_first_row_of_col_grp))
       }
