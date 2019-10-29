@@ -16,7 +16,8 @@ agg(to, ..., to.keep = NULL, subset = NULL, subsetq = NULL,
 
 \item{by}{a character vector with zero, one or more column names of \code{X}
 to group by (the left hand side of the formula in
-\code{reshape2::\link[reshape2]{dcast}}/\code{data.table::\link[data.table]{dcast}}).}
+\code{reshape2::\link[reshape2]{dcast}} /
+\code{data.table::\link[data.table]{dcast}}).}
 
 \item{...}{for \code{dcast}, one or more objects as returned by \code{agg}.
 

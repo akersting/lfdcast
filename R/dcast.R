@@ -3,22 +3,8 @@
 #' @param X the data frame to cast.
 #' @param by a character vector with zero, one or more column names of \code{X}
 #'   to group by (the left hand side of the formula in
-#'   \code{reshape2::\link[reshape2]{dcast}}/\code{data.table::\link[data.table]{dcast}}).
-#'
-#'
-#'
-#'
-#'
-#'
-#'
-#'
-#'
-#'
-#'
-#'
-#'
-#'
-#'
+#'   \code{reshape2::\link[reshape2]{dcast}} /
+#'   \code{data.table::\link[data.table]{dcast}}).
 #' @param ... for \code{dcast}, one or more objects as returned by \code{agg}.
 #'
 #'   For \code{agg}, one or more unquoted expressions, each containing exactly
@@ -44,13 +30,6 @@
 #'   by which to spread \code{X} (the right hand side of the formula in
 #'   \code{reshape2::\link[reshape2]{dcast}} /
 #'   \code{data.table::\link[data.table]{dcast}}).
-#'
-#'
-#'
-#'
-#'
-#'
-#'
 #' @param to.keep a data.frame with one or more of the columns given as
 #'   \code{to}: keep only result columns corresponding to combinations of values
 #'   on the \code{to} columns that are contained in \code{to.keep}.
