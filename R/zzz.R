@@ -56,7 +56,14 @@
   ptr <- getNativeSymbolInfo("min", "lfdcast")[["address"]]
   register_fun.aggregate("gmin", ptr,
                          support(
-                           class = c(NA_character_, "Date", "ordered"),
+                           class = "ordered",
+                           storage.mode = "integer",
+                           fill.default = NA_integer_,
+                           fill.storage.modes = "integer",
+                           convert.fill.from = "logical",
+                           keep.attr = TRUE
+                         ), support(
+                           class = c(NA_character_, "Date"),
                            storage.mode = c("integer", "logical"),
                            fill.default = Inf,
                            fill.storage.modes = c("integer", "double"),
@@ -74,16 +81,23 @@
   ptr <- getNativeSymbolInfo("max", "lfdcast")[["address"]]
   register_fun.aggregate("gmax", ptr,
                          support(
-                           class = c(NA_character_, "Date", "ordered"),
+                           class = "ordered",
+                           storage.mode = "integer",
+                           fill.default = NA_integer_,
+                           fill.storage.modes = "integer",
+                           convert.fill.from = "logical",
+                           keep.attr = TRUE
+                         ), support(
+                           class = c(NA_character_, "Date"),
                            storage.mode = c("integer", "logical"),
-                           fill.default = Inf,
+                           fill.default = -Inf,
                            fill.storage.modes = c("integer", "double"),
                            convert.fill.from = c("logical"),
                            keep.attr = TRUE
                          ), support(
                            class = c(NA_character_, "Date", "POSIXct"),
                            storage.mode = "double",
-                           fill.default = Inf,
+                           fill.default = -Inf,
                            fill.storage.modes = "double",
                            convert.fill.from = c("logical", "integer"),
                            keep.attr = TRUE
@@ -237,6 +251,10 @@ guniqueN <- function(x, na.rm = FALSE, fill = 0L)
   stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
 
 #' Aggregate Numeric Vectors by Taking Maxima/Minima
+#'
+#' @note These functions can also be applied to \emph{ordered} factors. In this
+#'   case the default \code{fill} value is \code{NA_integer_}.
+#'
 #' @inheritParams glength
 #' @export
 gmax <- function(x, na.rm = FALSE, fill = -Inf)

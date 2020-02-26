@@ -24,3 +24,7 @@ evaluation of \code{x} before applying the aggregation function to it?}
 \description{
 Aggregate Numeric Vectors by Taking Maxima/Minima
 }
+\note{
+These functions can also be applied to \emph{ordered} factors. In this
+  case the default \code{fill} value is \code{NA_integer_}.
+}
