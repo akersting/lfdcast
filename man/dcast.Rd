@@ -7,9 +7,15 @@
 \usage{
 dcast(X, by, ..., assert.valid.names = TRUE, nthread = 2L)
 
-agg(to, ..., to.keep = NULL, subset = NULL, subsetq = NULL,
-  names.fun = make.cnames, names.fun.args = list(sep1 = "_",
-  prefix.with.colname = FALSE))
+agg(
+  to,
+  ...,
+  to.keep = NULL,
+  subset = NULL,
+  subsetq = NULL,
+  names.fun = make.cnames,
+  names.fun.args = list(sep1 = "_", prefix.with.colname = FALSE)
+)
 }
 \arguments{
 \item{X}{the data frame to cast.}

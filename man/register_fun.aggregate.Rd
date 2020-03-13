@@ -7,8 +7,14 @@
 \usage{
 register_fun.aggregate(name, ptr, ..., rng = FALSE)
 
-support(class, storage.mode, fill.default, fill.storage.modes,
-  convert.fill.from, keep.attr)
+support(
+  class,
+  storage.mode,
+  fill.default,
+  fill.storage.modes,
+  convert.fill.from,
+  keep.attr
+)
 }
 \arguments{
 \item{name}{the name of the aggregation function}

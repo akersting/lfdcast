@@ -189,22 +189,25 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
                     },
                     x = default, attribs = attribs)
 
-      res_names <-
-        do.call(names.fun,
-                c(e.name = if (!is.null(names(post.expr)[j]) &&
-                               nchar(names(post.expr)[j]) > 0) {
-                  list(names(post.expr)[j])
-                } else {
-                  NULL
-                },
-                to.cols = if (length(to) > 0) {
-                  list(X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE])
-                } else {
-                  NULL
-                },
-                names.fun.args))
+      if (length(res) > 0) {
+        res_names <-
+          do.call(names.fun,
+                  c(e.name = if (!is.null(names(post.expr)[j]) &&
+                                 nchar(names(post.expr)[j]) > 0) {
+                    list(names(post.expr)[j])
+                  } else {
+                    NULL
+                  },
+                  to.cols = if (length(to) > 0) {
+                    list(X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE])
+                  } else {
+                    NULL
+                  },
+                  names.fun.args))
 
-      names(res) <- res_names
+        names(res) <- res_names
+      }
+
       if (is.character(value_var)) value_var <- enc2utf8(value_var)
 
       agg <- fun.aggregates[fun]

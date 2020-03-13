@@ -125,6 +125,10 @@ test_that("special features of lfdcast work as expected", {
 test_that("edgecases work", {
   expect_silent(lfdcast::dcast(iris, character()))
   expect_silent(lfdcast::dcast(iris, character(), agg(NULL)))
+
+  # 0 column result
+  X <- data.frame(a = 1:10, b = 1:10)
+  expect_silent(dcast(X, "a", agg("b", xxx = gsum(b), to.keep = data.frame(b = 0))))
 })
 
 test_that("correct errors are thrown", {
