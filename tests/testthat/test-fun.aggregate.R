@@ -166,7 +166,7 @@ test_that("gany", {
 #f <- function(n = 2L) FALSE
 #assignInNamespace("cedta", f, "data.table")
 test_that("guniqueN", {
-  if ("glength" %in% tests2skip) skip("guniqueN")
+  if ("guniqueN" %in% tests2skip) skip("guniqueN")
   # uniqueN ----
   value.var <- c(value.var_char, value.var_int, value.var_real, value.var_lgl)
   names(value.var) <- seq_along(value.var)

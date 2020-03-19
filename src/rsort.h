@@ -10,6 +10,9 @@
 #define n_bucket 256
 #define mask 0xFF
 
+#define RANK_THEN_VALUE 0
+#define VALUE_THEN_RANK 1
+
 struct uniqueN_data {
   uint32_t rank;
   uint64_t value;
@@ -18,6 +21,7 @@ struct uniqueN_data {
 void rsort(struct uniqueN_data *restrict x,
            int n,
            int hist_rank[restrict][n_bucket],
-           int hist_value[restrict][n_bucket]);
+           int hist_value[restrict][n_bucket],
+           int order);
 
 #endif

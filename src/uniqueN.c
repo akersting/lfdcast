@@ -55,7 +55,7 @@ int uniqueN_(void *restrict res, const int typeof_res, const void *restrict valu
 
   if (uniqueN_data_length > 0) {
     //isort(uniqueN_data, uniqueN_data_length);
-    rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value);
+    rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value, RANK_THEN_VALUE);
     //qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_data), uniqueN_int_cmp);
 
     output[(uniqueN_data)->rank] = 1;
@@ -150,7 +150,7 @@ SEXP uniqueN_vec(SEXP x, SEXP na_rm_) {
 
   if (uniqueN_data_length > 0) {
     //isort(uniqueN_data, uniqueN_data_length);
-    rsort(uniqueN_data, uniqueN_data_length, NULL, hist_value);
+    rsort(uniqueN_data, uniqueN_data_length, NULL, hist_value, RANK_THEN_VALUE);
     //qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_data), uniqueN_int_cmp);
 
     output = 1;
