@@ -27,8 +27,8 @@
 #'   function directly, it is also possible to specify an expression which
 #'   evaluates to such an expression.
 #' @param to a character vector with zero, one or more column names of \code{X}
-#'   by which to spread \code{X} (the right hand side of the formula in
-#'   \code{reshape2::\link[reshape2]{dcast}} /
+#'   (or a list hereof) by which to spread \code{X} (the right hand side of the
+#'   formula in \code{reshape2::\link[reshape2]{dcast}} /
 #'   \code{data.table::\link[data.table]{dcast}}).
 #' @param to.keep a data.frame with one or more of the columns given as
 #'   \code{to}: keep only result columns corresponding to combinations of values
@@ -72,7 +72,17 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
     map_input_rows_to_output_rows <- seq(0L, nrow(X) - 1L)
   }
 
-  args <- list(...)
+  args <- list()
+  args_nested <- list(...)
+  for (i in seq_along(args_nested)) {
+    if (inherits(args_nested[[i]], "lfdcast_nested_agg_arg")) {
+      for (j in seq_along(args_nested[[i]])) {
+        args[[length(args) + 1L]] <- args_nested[[i]][[j]]
+      }
+    } else {
+      args[[length(args) + 1L]] <- args_nested[[i]]
+    }
+  }
 
   arg_list_for_core <- list()
   post_expr_list <- list()
@@ -355,19 +365,40 @@ agg <- function(to, ..., to.keep = NULL, subset = NULL, subsetq = NULL,
   }
   if (!is.null(subsetq)) subset <- subsetq
 
-  list(
-    to = to,
-    fun.aggregate = fun.aggregate,
-    value.var = value.var,
-    fill = fill,
-    to.keep = to.keep,
-    subset = subset,
-    na.rm = na.rm,
-    post.expr = as.list(aggs),
-    post.expr_pos = post.expr_pos,
-    names.fun = match.fun(names.fun),
-    names.fun.args = names.fun.args
-  )
+  if (is.list(to)) {
+    structure(
+      lapply(to, function(this_to) {
+        list(
+          to = this_to,
+          fun.aggregate = fun.aggregate,
+          value.var = value.var,
+          fill = fill,
+          to.keep = to.keep,
+          subset = subset,
+          na.rm = na.rm,
+          post.expr = as.list(aggs),
+          post.expr_pos = post.expr_pos,
+          names.fun = match.fun(names.fun),
+          names.fun.args = names.fun.args
+        )
+      }),
+      class = "lfdcast_nested_agg_arg"
+    )
+  } else {
+    list(
+      to = to,
+      fun.aggregate = fun.aggregate,
+      value.var = value.var,
+      fill = fill,
+      to.keep = to.keep,
+      subset = subset,
+      na.rm = na.rm,
+      post.expr = as.list(aggs),
+      post.expr_pos = post.expr_pos,
+      names.fun = match.fun(names.fun),
+      names.fun.args = names.fun.args
+    )
+  }
 }
 
 #' Extract Details on the Call to an Aggregation Function from an Unevaluated

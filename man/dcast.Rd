@@ -53,8 +53,8 @@ the result are invalid or not unique?}
 \item{nthread}{\emph{a hint} to the function on how many threads to use.}
 
 \item{to}{a character vector with zero, one or more column names of \code{X}
-by which to spread \code{X} (the right hand side of the formula in
-\code{reshape2::\link[reshape2]{dcast}} /
+(or a list hereof) by which to spread \code{X} (the right hand side of the
+formula in \code{reshape2::\link[reshape2]{dcast}} /
 \code{data.table::\link[data.table]{dcast}}).}
 
 \item{to.keep}{a data.frame with one or more of the columns given as
