@@ -103,6 +103,41 @@
                            keep.attr = TRUE
                          ))
 
+  ptr <- getNativeSymbolInfo("first", "lfdcast")[["address"]]
+  register_fun.aggregate("gfirst", ptr,
+                         support(
+                           class = NULL,
+                           storage.mode = c("logical"),
+                           fill.default = NA,
+                           fill.storage.modes = c("logical"),
+                           convert.fill.from = c("integer", "double"),
+                           keep.attr = TRUE
+                         ),
+                         support(
+                           class = NULL,
+                           storage.mode = c("integer"),
+                           fill.default = NA_integer_,
+                           fill.storage.modes = c("integer"),
+                           convert.fill.from = c("logical", "double"),
+                           keep.attr = TRUE
+                         ),
+                         support(
+                           class = NULL,
+                           storage.mode = c("double"),
+                           fill.default = NA_real_,
+                           fill.storage.modes = c("double"),
+                           convert.fill.from = c("logical", "integer"),
+                           keep.attr = TRUE
+                         ),
+                         support(
+                           class = NULL,
+                           storage.mode = c("character"),
+                           fill.default = NA_character_,
+                           fill.storage.modes = c("character"),
+                           convert.fill.from = NULL,
+                           keep.attr = TRUE
+                         ))
+
   ptr <- getNativeSymbolInfo("last", "lfdcast")[["address"]]
   register_fun.aggregate("glast", ptr,
                          support(
@@ -268,10 +303,15 @@ gmin <- function(x, na.rm = FALSE, fill = Inf)
 #' Aggregate by Selecting one Element
 #' @inheritParams glength
 #' @export
+gfirst <- function(x, na.rm = FALSE, fill = NA)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' @rdname gfirst
+#' @export
 glast <- function(x, na.rm = FALSE, fill = NA)
   stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
 
-#' @rdname glast
+#' @rdname gfirst
 #' @export
 gsample <- function(x, na.rm = FALSE, fill = NA)
   stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
