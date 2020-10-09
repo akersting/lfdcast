@@ -16,13 +16,14 @@ int all_(void *restrict res, const int typeof_res, const void *restrict value_va
   }
 
   LOOP_OVER_ROWS {
+    if (OUTPUT_I == FALSE) continue;
     if (input[i] == NA_INTEGER) {
       if (na_rm) continue;
       if (OUTPUT_I == TRUE) OUTPUT_I = NA_INTEGER;
     } else if (!input[i]) {
       OUTPUT_I = FALSE;
     }
-    HIT_I = 1;
+    if (!HIT_I) HIT_I = 1;
   }
 
   if (default_res != TRUE) {

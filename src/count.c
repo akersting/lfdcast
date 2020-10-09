@@ -16,7 +16,7 @@ int count_(void *restrict res, const int typeof_res, const void *restrict value_
   LOOP_OVER_ROWS {
     if (na_rm && ISNA_INPUT_I) continue;
     OUTPUT_I++;
-    HIT_I = 1;
+    if (!HIT_I) HIT_I = 1;
   }
 
   if (default_res != 0) {

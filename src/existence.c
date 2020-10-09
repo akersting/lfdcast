@@ -10,7 +10,7 @@ int existence_(void *restrict res, const int typeof_res, const void *restrict va
 
   LOOP_OVER_ROWS {
     if (na_rm && ISNA_INPUT_I) continue;
-    OUTPUT_I = TRUE;
+    if (OUTPUT_I != TRUE) OUTPUT_I = TRUE;
   }
 
   return 0;

@@ -17,12 +17,12 @@ int sum_(void *restrict res, const int typeof_res, const void *restrict value_va
     LOOP_OVER_ROWS {
       if (input[i] == NA_LOGICAL) {
         if (na_rm) continue;
-        OUTPUT_I = NA_INTEGER;
+        if (OUTPUT_I != NA_INTEGER) OUTPUT_I = NA_INTEGER;
       } else {
         if (OUTPUT_I == NA_INTEGER) continue;
         OUTPUT_I += input[i];
       }
-      HIT_I = 1;
+      if (!HIT_I) HIT_I = 1;
     }
 
     if (default_res != 0) {
@@ -43,12 +43,12 @@ int sum_(void *restrict res, const int typeof_res, const void *restrict value_va
     LOOP_OVER_ROWS {
       if (ISNA_INPUT_I) {
         if (na_rm) continue;
-        OUTPUT_I = NA_REAL;
+        if (!ISNAN(OUTPUT_I)) OUTPUT_I = NA_REAL;
       } else {
         if (ISNAN(OUTPUT_I)) continue;
         OUTPUT_I += INPUT_I;
       }
-      HIT_I = 1;
+      if (!HIT_I) HIT_I = 1;
     }
 
     if (default_res != 0) {

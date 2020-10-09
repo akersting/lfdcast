@@ -18,7 +18,7 @@ int mean_(void *restrict res, const int typeof_res, const void *restrict value_v
   LOOP_OVER_ROWS {
     if (ISNA_INPUT_I) {
       if (na_rm) continue;
-      OUTPUT_I = NA_REAL;
+      if (!ISNAN(OUTPUT_I)) OUTPUT_I = NA_REAL;
     } else {
       if (ISNAN(OUTPUT_I)) continue;
       OUTPUT_I += INPUT_I;
