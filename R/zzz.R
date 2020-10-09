@@ -189,7 +189,7 @@
                          support(
                            class = NA_character_,
                            storage.mode = c("integer", "logical"),
-                           fill.default = TRUE,
+                           fill.default = FALSE,
                            fill.storage.modes = c("logical"),
                            convert.fill.from = c("integer"),
                            keep.attr = FALSE
