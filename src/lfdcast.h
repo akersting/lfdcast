@@ -1,13 +1,9 @@
-#include "../inst/include/lfdcast.h"
-
-// required for DATAPTR
-#include <Rversion.h>
-#if defined(R_VERSION) && R_VERSION < R_Version(3, 5, 0)
-#define USE_RINTERNALS
-#endif
+#define USE_RINTERNALS // for definition of SEXPREC_ALIGN (and DATAPTR)
 
 #include "R.h"
 #include "Rinternals.h"
+
+#include "../inst/include/lfdcast.h"
 
 SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
              SEXP map_output_cols_to_input_rows, SEXP res,
