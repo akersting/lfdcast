@@ -13,3 +13,4 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
              SEXP nthread_SEXP);
 
 SEXP get_row_ranks_unique_pos(SEXP x_SEXP, SEXP res_SEXP);
+void int_res_to_char_res(const void *restrict res_ptr_j, SEXP res_j, SEXP value_var_j, int n);

@@ -1,6 +1,17 @@
 # nocov start
 .onLoad <- function(libname, pkgname) {
 
+  ptr <- getNativeSymbolInfo("list", "lfdcast")[["address"]]
+  register_fun.aggregate("glist", ptr,
+                         support(
+                           class = NULL,
+                           storage.mode = c("integer", "logical", "double", "character"),
+                           fill.default = NULL,
+                           fill.storage.modes = c("list"),
+                           convert.fill.from = NULL,
+                           keep.attr = FALSE
+                         ))
+
   ptr <- getNativeSymbolInfo("count", "lfdcast")[["address"]]
   register_fun.aggregate("glength", ptr,
                          support(
@@ -336,6 +347,15 @@ gmean <- function(x, na.rm = FALSE, fill = NaN)
 #' @rdname gmean
 #' @export
 gmedian <- function(x, na.rm = FALSE, fill = NA_real_)
+  stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
+
+#' Aggregate by Collecting Elements into Lists
+#' @param fill value with which to fill empty cells in the result. The default
+#'   \code{NULL} corresponds to \code{list(x[integer()])}. If given, it must be
+#'   a list of length 1.
+#' @inheritParams glength
+#' @export
+glist <- function(x, na.rm = FALSE, fill = NULL)
   stop("This function must not be called directly. Have a look at ?lfdcast::dcast.")
 
 # nocov end

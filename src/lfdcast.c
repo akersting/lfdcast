@@ -1,4 +1,5 @@
 #include "lfdcast.h"
+#include "list.h"
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -69,6 +70,13 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
     if (TYPEOF(VECTOR_ELT(res, i)) == STRSXP) {
       res_ptr[i] = R_alloc(INTEGER(n_row_output_SEXP)[0], sizeof(int));
       memset(res_ptr[i], -1, INTEGER(n_row_output_SEXP)[0] * sizeof(int));
+    } else if (TYPEOF(VECTOR_ELT(res, i)) == VECSXP) {
+      int n = INTEGER(n_row_output_SEXP)[0];
+      res_ptr[i] = R_alloc(n, sizeof(int **));
+      int **col = res_ptr[i];
+      for (int j = 0; j < n; j++) {
+        col[j] = NULL;
+      }
     } else {
       res_ptr[i] = DATAPTR(VECTOR_ELT(res, i));
     }
@@ -151,17 +159,23 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
   if (failure) error("there were errors in the pthreaded code; see above");
 
   for (int j = 0; j < LENGTH(res); j++) {
-    if (TYPEOF(VECTOR_ELT(res, j)) != STRSXP) continue;
-    int *output = ((int **) res_ptr)[j];
-    for (int i = 0; i < INTEGER(n_row_output_SEXP)[0]; i++) {
-      if (output[i] < 0) continue;
-      SET_STRING_ELT(VECTOR_ELT(res, j), i, STRING_ELT(VECTOR_ELT(value_var, j), output[i]));
+    if (TYPEOF(VECTOR_ELT(res, j)) == STRSXP) {
+      int_res_to_char_res(res_ptr[j], VECTOR_ELT(res, j), VECTOR_ELT(value_var, j), LENGTH(VECTOR_ELT(res, j)));
+    } else if (TYPEOF(VECTOR_ELT(res, j)) == VECSXP) {
+      allocate_list_res(res_ptr[j], VECTOR_ELT(res, j), VECTOR_ELT(value_var, j));
     }
   }
 
   return res;
 }
 
+void int_res_to_char_res(const void *restrict res_ptr_j, SEXP res_j, SEXP value_var_j, int n) {
+  int *restrict output = (int *) res_ptr_j;
+  for (int i = 0; i < n; i++) {
+    if (output[i] < 0) continue;
+    SET_STRING_ELT(res_j, i, STRING_ELT(value_var_j, output[i]));
+  }
+}
 
 SEXP get_row_ranks_unique_pos(SEXP x_SEXP, SEXP res_SEXP) {
   int *restrict x = INTEGER(x_SEXP);

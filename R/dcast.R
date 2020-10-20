@@ -181,6 +181,12 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
         }
       } else {
         default <- support[["fill.default"]]
+        if (is.null(default) && fun == "glist") {
+          default <- list(value_var[integer()])
+        }
+      }
+      if (length(default) != 1L) {
+        stop("'fill' must be of length 1")
       }
 
       if (isTRUE(support[["keep.attr"]])) {
