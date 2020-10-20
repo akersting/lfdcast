@@ -2,10 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-void rsort(struct uniqueN_data *restrict x, int n, int hist_rank[restrict][n_bucket],
-           int hist_value[restrict][n_bucket], int order) {
+int rsort(struct uniqueN_data *restrict x, int n, int hist_rank[restrict][n_bucket],
+          int hist_value[restrict][n_bucket], int order) {
 
   struct uniqueN_data *s = (struct uniqueN_data *) malloc(n * sizeof(struct uniqueN_data));
+  if (s == NULL) {
+    return 1;
+  }
+
   int pass = 0;
 
   int step = 0;
@@ -17,11 +21,13 @@ void rsort(struct uniqueN_data *restrict x, int n, int hist_rank[restrict][n_buc
     case 0: goto value;
     case 1: goto rank;
     }
+    break;  // silence compiler warning
   case VALUE_THEN_RANK:
     switch(step) {
     case 0: goto rank;
     case 1: goto value;
     }
+    break;  // silence compiler warning
   }
   goto end;
 
@@ -94,4 +100,6 @@ void rsort(struct uniqueN_data *restrict x, int n, int hist_rank[restrict][n_buc
     memcpy(s, x, n * sizeof(struct uniqueN_data));
     free(x);
   }
+
+  return 0;
 }

@@ -82,7 +82,10 @@ char *median_(void *restrict res, const int typeof_res, const void *restrict val
 
   if (uniqueN_data_length > 0) {
     //isort(uniqueN_data, uniqueN_data_length);
-    rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value, RANK_THEN_VALUE);
+    if (rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value, RANK_THEN_VALUE) != 0) {
+      ret = "'rsort' failed (out of memory)";
+      goto cleanup;
+    }
     //qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_data), uniqueN_int_cmp);
 
     int cntr = 1;
