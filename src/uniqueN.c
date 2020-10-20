@@ -1,19 +1,38 @@
 #include "lfdcast.h"
 #include "rsort.h"
 
-int uniqueN_(void *restrict res, const int typeof_res, const void *restrict value_var,
-             const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
-             const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
-             const int n_row_output, int *restrict hit) {
+char *uniqueN_(void *restrict res, const int typeof_res, const void *restrict value_var,
+               const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
+               const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
+               const int n_row_output, int *restrict hit) {
+
+  char *ret = NULL;
 
   int *restrict output = (int *) res;
   const void *restrict input = value_var;
 
-  struct uniqueN_data * restrict uniqueN_data =
-    (struct uniqueN_data *) malloc(n_input_rows_in_output_col * sizeof(struct uniqueN_data));
+  struct uniqueN_data * restrict uniqueN_data = NULL;
+  int (*restrict hist_rank)[n_bucket] = NULL;
+  int (*restrict hist_value)[n_bucket] = NULL;
 
-  int (*restrict hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
-  int (*restrict hist_value)[n_bucket] = malloc(sizeof(int[n_pass_value][n_bucket]));
+  uniqueN_data = malloc(n_input_rows_in_output_col * sizeof(struct uniqueN_data));
+  if (uniqueN_data == NULL) {
+    ret = "'malloc' failed";
+    goto cleanup;
+  }
+
+  hist_rank = malloc(sizeof(int[n_pass_rank][n_bucket]));
+  if (hist_rank == NULL) {
+    ret = "'malloc' failed";
+    goto cleanup;
+  }
+
+  hist_value = malloc(sizeof(int[n_pass_value][n_bucket]));
+  if (hist_value == NULL) {
+    ret = "'malloc' failed";
+    goto cleanup;
+  }
+
   memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
   memset(hist_value, 0, n_pass_value * n_bucket * sizeof(int));
 
@@ -90,11 +109,12 @@ int uniqueN_(void *restrict res, const int typeof_res, const void *restrict valu
     }
   }
 
+  cleanup:
   free(uniqueN_data);
   free(hist_rank);
   free(hist_value);
 
-  return 0;
+  return ret;
 }
 
 struct lfdcast_agg uniqueN = {

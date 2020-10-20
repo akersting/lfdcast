@@ -1,9 +1,9 @@
 #include "lfdcast.h"
 
-int last_(void *restrict res, const int typeof_res, const void *restrict value_var,
-          const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
-          const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
-          const int n_row_output, int *restrict hit) {
+char *last_(void *restrict res, const int typeof_res, const void *restrict value_var,
+            const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
+            const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
+            const int n_row_output, int *restrict hit) {
 
   if (typeof_value_var == LGLSXP || typeof_value_var == INTSXP) {
     int *restrict output = (int *) res;
@@ -31,7 +31,7 @@ int last_(void *restrict res, const int typeof_res, const void *restrict value_v
     }
   }
 
-  return 0;
+  return NULL;
 }
 
 struct lfdcast_agg last = {

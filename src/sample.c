@@ -1,17 +1,30 @@
 #include "lfdcast.h"
 #include "rsort.h"
 
-int sample_(void *restrict res, const int typeof_res, const void *restrict value_var,
-            const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
-            const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
-            const int n_row_output, int *restrict hit) {
+char *sample_(void *restrict res, const int typeof_res, const void *restrict value_var,
+              const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
+              const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
+              const int n_row_output, int *restrict hit) {
+
+  char *ret = NULL;
 
   const void *restrict input = value_var;
 
-  struct uniqueN_data *restrict uniqueN_data =
-    (struct uniqueN_data *) malloc(n_input_rows_in_output_col * sizeof(struct uniqueN_data));
+  struct uniqueN_data * restrict uniqueN_data = NULL;
+  int (*restrict hist_rank)[n_bucket] = NULL;
 
-  int (*restrict hist_rank)[n_bucket] = malloc(sizeof(int[n_pass_rank][n_bucket]));
+  uniqueN_data = malloc(n_input_rows_in_output_col * sizeof(struct uniqueN_data));
+  if (uniqueN_data == NULL) {
+    ret = "'malloc' failed";
+    goto cleanup;
+  }
+
+  hist_rank = malloc(sizeof(int[n_pass_rank][n_bucket]));
+  if (hist_rank == NULL) {
+    ret = "'malloc' failed";
+    goto cleanup;
+  }
+
   memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
 
   int uniqueN_data_length = 0;
@@ -79,10 +92,11 @@ int sample_(void *restrict res, const int typeof_res, const void *restrict value
 
   }
 
+  cleanup:
   free(uniqueN_data);
   free(hist_rank);
 
-  return 0;
+  return ret;
 }
 
 

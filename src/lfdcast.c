@@ -5,7 +5,6 @@
 #include <string.h>
 #include <pthread.h>
 
-
 struct thread_data {
   lfdcast_agg_fun_t *agg;
   void **value_var;
@@ -40,23 +39,26 @@ void *lfdcast_core(void *td_void) {
   int n_row_output = td->n_row_output;
 
   int *hit = (int *) malloc(n_row_output * sizeof(int));
+  if (hit == NULL) {
+    return "'malloc' failed";
+  }
 
+  char *ret = NULL;
   for (int jj = 0; jj < length_cols_split; jj++) {
     int j = cols_split[jj];
 
     memset(hit, 0, n_row_output * sizeof(int));
 
-    agg[j](res[j], typeof_res[j], value_var[j], typeof_value_var[j],
-           na_rm[j], map_output_cols_to_input_rows[j], map_output_cols_to_input_rows_lengths[j],
-           map_input_rows_to_output_rows, n_row_output, hit);
+    ret = agg[j](res[j], typeof_res[j], value_var[j], typeof_value_var[j],
+                 na_rm[j], map_output_cols_to_input_rows[j], map_output_cols_to_input_rows_lengths[j],
+                 map_input_rows_to_output_rows, n_row_output, hit);
 
-
+    if (ret != NULL) break;
   }
 
   free(hit);
-  return NULL;
+  return ret;
 }
-
 
 SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
              SEXP map_output_cols_to_input_rows, SEXP res,
@@ -128,6 +130,7 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
     td[i].cols_split = INTEGER(VECTOR_ELT(cols_split, i));
     td[i].length_cols_split = LENGTH(VECTOR_ELT(cols_split, i));
     if (pthread_create(thread_ids + i, NULL, lfdcast_core, (void *) (td + i)) != 0) {
+      REprintf("not all required pthreads could be created\n");
       failure = 1;
       nthread = i;
       break;
@@ -135,15 +138,20 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
   }
 
 
+  void *ret;
   for (int i = 0; i < nthread; i++) {
-    if (pthread_join(*(thread_ids + i), NULL) != 0) {
+    if (pthread_join(*(thread_ids + i), &ret) != 0) {
+      REprintf("failed to join pthread %d\n", i);
+      failure = 1;
+    } else if (ret != NULL) {
+      REprintf("an aggregation function failed with '%s'\n", ret);
       failure = 1;
     }
   }
 
   PutRNGstate();
 
-  if (failure) error("something went wrong");
+  if (failure) error("there were errors in the pthreaded code; see above");
 
   for (int j = 0; j < LENGTH(res); j++) {
     if (TYPEOF(VECTOR_ELT(res, j)) != STRSXP) continue;
