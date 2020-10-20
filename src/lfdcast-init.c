@@ -4,8 +4,6 @@
 void R_init_lfdcast(DllInfo *info) {
   static const R_CallMethodDef callMethods[]  = {
     {"lfdcast", (DL_FUNC) &lfdcast, 10},
-    {"uniqueN_vec", (DL_FUNC) &uniqueN_vec, 2},
-    {"char_map", (DL_FUNC) &char_map, 1},
     {"get_row_ranks_unique_pos", (DL_FUNC) &get_row_ranks_unique_pos, 2},
     {NULL, NULL, 0}
   };
