@@ -108,8 +108,6 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
         stop(deparse(subset), " does not evaluate to a logical vector ",
              "(without missings) of length ", nrow(X), " (= nrow(X)).")
       }
-    } else {
-      rows2keep <- rep(TRUE, nrow(X))
     }
 
     if (length(to) > 0L) {
@@ -135,16 +133,20 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
         this_to.keep <- rep(TRUE, nrow(X_first_row_of_col_grp))
       }
 
-      col_grp_starts <- c(col_grp_starts, nrow(X) + 1L)  # might be double (OK)
       map_output_cols_to_input_rows <-
-        lapply(which(this_to.keep), function(s) {
-          res <- col_order[seq(col_grp_starts[s], col_grp_starts[s + 1L] - 1L)]
-          res[rows2keep[res]] - 1L  # 0-based
-        })
+        .Call(C_get_map_output_cols_to_input_rows, col_order,
+              col_grp_starts, nrow(X), which(this_to.keep),
+              if (length(subset) > 0L) rows2keep else NULL)
+
       n_col_output <- length(map_output_cols_to_input_rows)
 
     } else {  # by only
-      map_output_cols_to_input_rows <- list(which(rows2keep) - 1L)  # 0-based
+      if (length(subset) > 0L) {
+        map_output_cols_to_input_rows <- list(which(rows2keep) - 1L)  # 0-based
+      } else {
+        map_output_cols_to_input_rows <- list(seq.int(0L, nrow(X) - 1L))
+      }
+
       n_col_output <- 1L
       this_to.keep <- TRUE
     }
