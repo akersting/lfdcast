@@ -244,23 +244,23 @@
   ptr <- getNativeSymbolInfo("mean", "lfdcast")[["address"]]
   register_fun.aggregate("gmean", ptr,
                          support(
-                           class = NA_character_,
+                           class = c(NA_character_, "Date", "POSIXct"),
                            storage.mode = c("logical", "integer", "double"),
                            fill.default = NaN,
                            fill.storage.modes = c("double"),
                            convert.fill.from = c("logical", "integer"),
-                           keep.attr = FALSE
+                           keep.attr = TRUE
                          ))
 
   ptr <- getNativeSymbolInfo("median", "lfdcast")[["address"]]
   register_fun.aggregate("gmedian", ptr,
                          support(
-                           class = NA_character_,
+                           class = c(NA_character_, "Date", "POSIXct"),
                            storage.mode = c("logical", "integer", "double"),
                            fill.default = NA_real_,
                            fill.storage.modes = c("double"),
                            convert.fill.from = c("logical", "integer"),
-                           keep.attr = FALSE
+                           keep.attr = TRUE
                          ))
 }
 
