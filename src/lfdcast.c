@@ -20,9 +20,6 @@ struct thread_data {
   int n_row_output;
 };
 
-pthread_mutex_t string_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t rng_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 void *lfdcast_core(void *td_void) {
   struct thread_data *td = (struct thread_data *) td_void;
   lfdcast_agg_fun_t *agg = td->agg;
