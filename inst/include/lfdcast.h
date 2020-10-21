@@ -35,7 +35,7 @@ struct lfdcast_agg {
          ii < n_input_rows_in_output_col && ((i = input_rows_in_output_col[ii]) || TRUE); \
          ii++)                                                                            \
 
-inline int sizeof_type(int type) {
+static inline int sizeof_type(int type) {
    switch(type) {
    case LGLSXP: return sizeof(int);
    case INTSXP: return sizeof(int);
