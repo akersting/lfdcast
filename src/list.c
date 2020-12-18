@@ -24,7 +24,7 @@ char *list_(void *restrict res, const int typeof_res, const void *restrict value
     for (int i = 0; i < n_row_output; i++) {
       if (hit[i] == 0) continue;
 
-      data_size = INT2VEC(hit[i]) * sizeof(VECREC);
+      data_size = INT2VEC((size_t) hit[i]) * sizeof(VECREC);
       output[i] = malloc(offset + data_size);
       if (output[i] == NULL) {
         for (int ii = 0; ii < i; ii++) {
@@ -34,7 +34,7 @@ char *list_(void *restrict res, const int typeof_res, const void *restrict value
       }
       memcpy(output[i], hit + i, sizeof(int));
     }
-    memset(hit, 0, n_row_output * sizeof(int));
+    memset(hit, 0, (size_t) n_row_output * sizeof(int));
 
     const int *restrict input = (int *) value_var;
 
@@ -48,7 +48,7 @@ char *list_(void *restrict res, const int typeof_res, const void *restrict value
     for (int i = 0; i < n_row_output; i++) {
       if (hit[i] == 0) continue;
 
-      data_size = FLOAT2VEC(hit[i]) * sizeof(VECREC);
+      data_size = FLOAT2VEC((size_t) hit[i]) * sizeof(VECREC);
       output[i] = malloc(offset + data_size);
       if (output[i] == NULL) {
         for (int ii = 0; ii < i; ii++) {
@@ -58,7 +58,7 @@ char *list_(void *restrict res, const int typeof_res, const void *restrict value
       }
       memcpy(output[i], hit + i, sizeof(int));
     }
-    memset(hit, 0, n_row_output * sizeof(int));
+    memset(hit, 0, (size_t) n_row_output * sizeof(int));
 
     const double *restrict input = (double *) value_var;
 
@@ -72,7 +72,7 @@ char *list_(void *restrict res, const int typeof_res, const void *restrict value
     for (int i = 0; i < n_row_output; i++) {
       if (hit[i] == 0) continue;
 
-      data_size = INT2VEC(hit[i]) * sizeof(VECREC);
+      data_size = INT2VEC((size_t) hit[i]) * sizeof(VECREC);
       output[i] = malloc(offset + data_size);
       if (output[i] == NULL) {
         for (int ii = 0; ii < i; ii++) {
@@ -82,7 +82,7 @@ char *list_(void *restrict res, const int typeof_res, const void *restrict value
       }
       memcpy(output[i], hit + i, sizeof(int));
     }
-    memset(hit, 0, n_row_output * sizeof(int));
+    memset(hit, 0, (size_t) n_row_output * sizeof(int));
 
     const SEXP *restrict input = (SEXP *) value_var;
 

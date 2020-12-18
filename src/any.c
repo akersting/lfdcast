@@ -10,7 +10,7 @@ char *any_(void *restrict res, const int typeof_res, const void *restrict value_
 
   int default_res = output[0];
   if (default_res != FALSE) {
-    memset(output, 0, n_row_output * sizeof(int));
+    memset(output, 0, (size_t) n_row_output * sizeof(int));
   }
 
   LOOP_OVER_ROWS {

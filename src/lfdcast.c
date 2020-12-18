@@ -36,7 +36,7 @@ void *lfdcast_core(void *td_void) {
   int *map_input_rows_to_output_rows = td->map_input_rows_to_output_rows;
   int n_row_output = td->n_row_output;
 
-  int *hit = (int *) malloc(n_row_output * sizeof(int));
+  int *hit = (int *) malloc((size_t) n_row_output * sizeof(int));
   if (hit == NULL) {
     return "'malloc' failed";
   }
@@ -45,7 +45,7 @@ void *lfdcast_core(void *td_void) {
   for (int jj = 0; jj < length_cols_split; jj++) {
     int j = cols_split[jj];
 
-    memset(hit, 0, n_row_output * sizeof(int));
+    memset(hit, 0, (size_t) n_row_output * sizeof(int));
 
     ret = agg[j](res[j], typeof_res[j], value_var[j], typeof_value_var[j],
                  na_rm[j], map_output_cols_to_input_rows[j], map_output_cols_to_input_rows_lengths[j],
@@ -65,14 +65,14 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
              SEXP cols_split, SEXP n_row_output_SEXP,
              SEXP nthread_SEXP) {
 
-  void **res_ptr = (void **) R_alloc(LENGTH(res), sizeof(void *));
+  void **res_ptr = (void **) R_alloc((size_t) LENGTH(res), sizeof(void *));
   for (int i = 0; i < LENGTH(res); i++) {
     if (TYPEOF(VECTOR_ELT(res, i)) == STRSXP) {
-      res_ptr[i] = R_alloc(INTEGER(n_row_output_SEXP)[0], sizeof(int));
-      memset(res_ptr[i], -1, INTEGER(n_row_output_SEXP)[0] * sizeof(int));
+      res_ptr[i] = R_alloc((size_t) INTEGER(n_row_output_SEXP)[0], sizeof(int));
+      memset(res_ptr[i], -1, (size_t) INTEGER(n_row_output_SEXP)[0] * sizeof(int));
     } else if (TYPEOF(VECTOR_ELT(res, i)) == VECSXP) {
       int n = INTEGER(n_row_output_SEXP)[0];
-      res_ptr[i] = R_alloc(n, sizeof(int **));
+      res_ptr[i] = R_alloc((size_t) n, sizeof(int **));
       int **col = res_ptr[i];
       for (int j = 0; j < n; j++) {
         col[j] = NULL;
@@ -82,27 +82,27 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
     }
   }
 
-  void **value_var_ptr = (void **) R_alloc(LENGTH(value_var), sizeof(void *));
+  void **value_var_ptr = (void **) R_alloc((size_t) LENGTH(value_var), sizeof(void *));
   for (int i = 0; i < LENGTH(value_var); i++) {
     value_var_ptr[i] = DATAPTR(VECTOR_ELT(value_var, i));
   }
 
-  int *typeof_value_var = (int *) R_alloc(LENGTH(value_var), sizeof(int));
+  int *typeof_value_var = (int *) R_alloc((size_t) LENGTH(value_var), sizeof(int));
   for (int i = 0; i < LENGTH(value_var); i++) {
     typeof_value_var[i] = TYPEOF(VECTOR_ELT(value_var, i));
   }
 
-  int *typeof_res = (int *) R_alloc(LENGTH(res), sizeof(int));
+  int *typeof_res = (int *) R_alloc((size_t) LENGTH(res), sizeof(int));
   for (int i = 0; i < LENGTH(res); i++) {
     typeof_res[i] = TYPEOF(VECTOR_ELT(res, i));
   }
 
-  int **map_output_cols_to_input_rows_ptr = (int **) R_alloc(LENGTH(map_output_cols_to_input_rows), sizeof(int *));
+  int **map_output_cols_to_input_rows_ptr = (int **) R_alloc((size_t) LENGTH(map_output_cols_to_input_rows), sizeof(int *));
   for (int i = 0; i < LENGTH(map_output_cols_to_input_rows); i++) {
     map_output_cols_to_input_rows_ptr[i] = INTEGER(VECTOR_ELT(map_output_cols_to_input_rows, i));
   }
 
-  lfdcast_agg_fun_t *agg_ptr = (lfdcast_agg_fun_t *) R_alloc(LENGTH(agg), sizeof(lfdcast_agg_fun_t *));
+  lfdcast_agg_fun_t *agg_ptr = (lfdcast_agg_fun_t *) R_alloc((size_t) LENGTH(agg), sizeof(lfdcast_agg_fun_t *));
   for (int i = 0; i < LENGTH(agg); i++) {
     agg_ptr[i] = ((struct lfdcast_agg *) R_ExternalPtrAddr(VECTOR_ELT(agg, i)))->fun;
   }

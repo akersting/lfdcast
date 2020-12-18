@@ -6,7 +6,7 @@ SEXP get_map_output_cols_to_input_rows(SEXP col_order,
                                        SEXP to_keep,
                                        SEXP rows2keep) {
 
-  int *cgs = (int *) R_alloc((LENGTH(col_grp_starts) + 1), sizeof(int));
+  int *cgs = (int *) R_alloc((size_t) LENGTH(col_grp_starts) + 1, sizeof(int));
 
   for (int i = 0; i < LENGTH(col_grp_starts); i++) {
     cgs[i] = INTEGER(col_grp_starts)[i] - 1;

@@ -35,7 +35,7 @@ char *median_(void *restrict res, const int typeof_res, const void *restrict val
   int (*restrict hist_rank)[n_bucket] = NULL;
   int (*restrict hist_value)[n_bucket] = NULL;
 
-  uniqueN_data = malloc(n_input_rows_in_output_col * sizeof(struct uniqueN_data));
+  uniqueN_data = malloc((size_t) n_input_rows_in_output_col * sizeof(struct uniqueN_data));
   if (uniqueN_data == NULL) {
     ret = "'malloc' failed";
     goto cleanup;
@@ -60,7 +60,7 @@ char *median_(void *restrict res, const int typeof_res, const void *restrict val
   LOOP_OVER_ROWS {
     if (na_rm && ISNA_INPUT_I) continue;
 
-    (uniqueN_data + uniqueN_data_length)->rank = map_input_rows_to_output_rows[i];
+    (uniqueN_data + uniqueN_data_length)->rank = (uint32_t) map_input_rows_to_output_rows[i];
     if (typeof_value_var == LGLSXP || typeof_value_var == INTSXP) {
       (uniqueN_data + uniqueN_data_length)->value = ((int *) input)[i];
       (uniqueN_data + uniqueN_data_length)->value = radix_long_flip((uniqueN_data + uniqueN_data_length)->value);

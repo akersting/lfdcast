@@ -8,8 +8,9 @@ SEXP test_fun_aggregate(SEXP agg, SEXP res, SEXP value_var, SEXP na_rm,
   int typeof_res = TYPEOF(VECTOR_ELT(res, 0));
   lfdcast_agg_fun_t fun = ((struct lfdcast_agg *) R_ExternalPtrAddr(VECTOR_ELT(agg, 0)))->fun;
 
-  int *hit = (int *) malloc(n_row_output * sizeof(int));
-  memset(hit, 0, n_row_output * sizeof(int));
+  int *hit = (int *) malloc((size_t) n_row_output * sizeof(int));
+  if (hit == NULL) error("'malloc' failed");
+  memset(hit, 0, (size_t) n_row_output * sizeof(int));
 
   fun(DATAPTR(VECTOR_ELT(res, 0)), typeof_res, DATAPTR(value_var), TYPEOF(value_var),
       INTEGER(na_rm)[0], INTEGER(input_rows_in_output_col),
