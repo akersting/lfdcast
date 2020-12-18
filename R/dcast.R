@@ -66,6 +66,10 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
   #                      ties.method = "dense") - 1L  # 0-based
   # )
   if (length(by) > 0L) {
+    if (length(wrong_by <- setdiff(by, names(X)))) {
+      stop("column(s) '", paste0(wrong_by, collapse = ", "),
+           "' given in 'by' are not in 'X'.")
+    }
     map_input_rows_to_output_rows <- data.table::frankv(X, cols = by, na.last = FALSE,
                                                         ties.method = "dense") - 1L  # 0-based
   } else {
@@ -73,7 +77,14 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
   }
 
   args <- list()
-  args_nested <- list(...)
+  args_nested <- substitute(...())
+  pf <- parent.frame()
+  args_nested <- lapply(args_nested, function(a) {
+    if (is.call(a) && a[[1L]] == quote(agg)) {
+      a[[1L]] <- quote(lfdcast::agg)
+    }
+    eval(a, pf)
+  })
   for (i in seq_along(args_nested)) {
     if (inherits(args_nested[[i]], "lfdcast_nested_agg_arg")) {
       for (j in seq_along(args_nested[[i]])) {
@@ -105,12 +116,17 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
 
       if (!is.logical(rows2keep) || length(rows2keep) != nrow(X) ||
           anyNA(rows2keep)) {
-        stop(deparse(subset), " does not evaluate to a logical vector ",
+        stop(deparse1(subset), " does not evaluate to a logical vector ",
              "(without missings) of length ", nrow(X), " (= nrow(X)).")
       }
     }
 
     if (length(to) > 0L) {
+      if (length(wrong_to <- setdiff(to, names(X)))) {
+        stop("column(s) '", paste0(wrong_to, collapse = ", "),
+             "' given in 'to' are not in 'X'.")
+      }
+
       col_order <- data.table:::forderv(X, by = to, retGrp = TRUE,
                                         sort = TRUE)
       col_grp_starts <- attr(col_order, "starts")
@@ -159,12 +175,12 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
       } else {
         value_var <- eval(value.var[[j]], X, enclos = parent.frame())
         if (!is.atomic(value_var) || length(value_var) != nrow(X)) {
-          stop(deparse(value.var[[j]]), " does not evaluate to an atomic ",
+          stop(deparse1(value.var[[j]]), " does not evaluate to an atomic ",
                "vector of length ", nrow(X), " (= nrow(X)).")
         }
       }
 
-      support <- getSupport(supports[[fun]], fun, value_var)
+      support <- getSupport(supports[[fun]], fun, post.expr[[j]], value_var)
 
       if (!is.null(fill[[j]])) {
         if (!storage.mode(fill[[j]]) %in% support[["fill.storage.modes"]]) {
@@ -176,7 +192,12 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
               charcter = as.character(fill[[j]])
             )
           } else {
-            stop("unsupported storage mode of 'fill'")
+            stop("unsupported storage mode of 'fill' in '",
+                 deparse1(post.expr[[j]]), "': actual is '",
+                 storage.mode(fill[[j]]), "' - directly supported are '",
+                 paste0(support[["fill.storage.modes"]], collapse = ", "),
+                 "' - supported via automatic conversion are also '",
+                 paste0(support[["convert.fill.from"]], collapse = ", "), "'.")
           }
         } else {
           default <- fill[[j]]
@@ -346,23 +367,25 @@ agg <- function(to, ..., to.keep = NULL, subset = NULL, subsetq = NULL,
                 names.fun.args = list(sep1 = "_", prefix.with.colname = FALSE)) {
   aggs <- substitute(...())
 
+  pf <- parent.frame()
+
   specs <- lapply(aggs, extract_agg_fun)
   specs <- lapply(seq_along(aggs), function(i, e) {
     if (is.null(specs[[i]])) {
       spec <- extract_agg_fun(eval(aggs[[i]], e))
       if (is.null(spec)) {
-        stop(deparse(aggs[[i]]), " neither is nor evaluates to an expression ",
+        stop(deparse1(aggs[[i]]), " neither is nor evaluates to an expression ",
              "containing a call to an aggregation function.")
       }
       spec
     } else {
       specs[[i]]
     }
-  }, e = parent.frame())
+  }, e = pf)
 
   na.rm <- lapply(specs,
-                  function(spec) if (is.null(s <- spec[["call"]][["na.rm"]])) FALSE else eval(s, envir = parent.frame()))
-  fill <- lapply(specs, function(spec) eval(spec[["call"]][["fill"]], envir = parent.frame()))
+                  function(spec) if (is.null(s <- spec[["call"]][["na.rm"]])) FALSE else eval(s, envir = pf))
+  fill <- lapply(specs, function(spec) eval(spec[["call"]][["fill"]], envir = pf))
   value.var <- lapply(specs, function(spec) spec[["call"]][["x"]])
   fun.aggregate <- lapply(specs, function(spec) spec[["agg_fun"]])
   post.expr_pos <- lapply(specs, function(spec) spec[["pos"]])
@@ -374,14 +397,23 @@ agg <- function(to, ..., to.keep = NULL, subset = NULL, subsetq = NULL,
   if (!is.null(subsetq)) subset <- subsetq
 
   if (is.list(to)) {
+    if (!is.null(to.keep) &&
+        (
+          !(is.list(to.keep) && !is.data.frame(to.keep)) ||
+          length(to) != length(to.keep)
+        )
+    ) {
+      stop("if 'to' is a list, 'to.keep' must also be one of the same length")
+    }
+
     structure(
-      lapply(to, function(this_to) {
+      lapply(seq_along(to), function(i) {
         list(
-          to = this_to,
+          to = to[[i]],
           fun.aggregate = fun.aggregate,
           value.var = value.var,
           fill = fill,
-          to.keep = to.keep,
+          to.keep = to.keep[[i]],
           subset = subset,
           na.rm = na.rm,
           post.expr = as.list(aggs),
@@ -430,13 +462,24 @@ agg <- function(to, ..., to.keep = NULL, subset = NULL, subsetq = NULL,
 extract_agg_fun <- function(x, agg_funs = names(fun.aggregates), pos = integer()) {
   if (is.call(x) &&
       any(idx <- unlist(lapply(agg_funs,
-                               function(agg_fun) identical(x[[1L]],
-                                                           as.symbol(agg_fun)))))) {
-    return(list(
+                               function(agg_fun) {
+                                 identical(x[[1L]], as.symbol(agg_fun)) ||
+                                   identical(x[[1L]], str2lang(paste0("lfdcast::", agg_fun))) ||
+                                   identical(x[[1L]], str2lang(paste0("lfdcast:::", agg_fun)))
+                               })))) {
+
+    ret <- list(
       agg_fun = agg_funs[idx],
       call = match.call(function(x, na.rm = FALSE, fill = NULL) {}, x),
       pos = pos
-    ))
+    )
+
+    if (!"x" %in% names(ret[["call"]])) {
+      stop(simpleError('argument "x" is missing, with no default',
+                       call = ret[["call"]]))
+    }
+
+    return(ret)
   }
 
   for (i in seq_along(x)[-1L]) {

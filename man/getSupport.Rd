@@ -4,13 +4,16 @@
 \alias{getSupport}
 \title{Find the Best Fitting Support Declaration}
 \usage{
-getSupport(l, fun.aggregate, value.var)
+getSupport(l, fun.aggregate, expr, value.var)
 }
 \arguments{
 \item{l}{the list of support declarations of the aggregation function}
 
 \item{fun.aggregate}{the name of the aggregation function (just used for
 error messages)}
+
+\item{expr}{the expression containing the call to the aggregation function
+(just used for error messages)}
 
 \item{value.var}{the input vector to which to aggregation function should be
 applied}

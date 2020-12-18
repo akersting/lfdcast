@@ -50,6 +50,8 @@ support <- function(class, storage.mode, fill.default, fill.storage.modes,
 #' @param l the list of support declarations of the aggregation function
 #' @param fun.aggregate the name of the aggregation function (just used for
 #'   error messages)
+#' @param expr the expression containing the call to the aggregation function
+#'   (just used for error messages)
 #' @param value.var the input vector to which to aggregation function should be
 #'   applied
 #'
@@ -58,7 +60,7 @@ support <- function(class, storage.mode, fill.default, fill.storage.modes,
 #'
 #' @importFrom stats na.omit
 #' @keywords internal
-getSupport <- function(l, fun.aggregate, value.var) {
+getSupport <- function(l, fun.aggregate, expr, value.var) {
   # NA -> not supported
   # 1 -> most specific class in support declaration
   # 2 -> second most specific class in support declaration
@@ -91,7 +93,8 @@ getSupport <- function(l, fun.aggregate, value.var) {
   if (all(is.na(res))) stop("the aggregation function '", fun.aggregate,
                             "' does not support a value.var of class(es) '",
                             paste0(class(value.var), collapse = ", "),
-                            "' and storage mode '", storage.mode(value.var), "'.")
+                            "' and storage mode '", storage.mode(value.var),
+                            "' in '", deparse1(expr), "'.")
 
   idx <- which.min(res)  # best fitting declaration
 
