@@ -215,7 +215,7 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
       if (isTRUE(support[["keep.attr"]])) {
         attribs <- attributes(value_var)
       } else if (!isFALSE(support[["keep.attr"]])) {
-        attribs <- attributes(value_var)[support[["keep.attr"]]]
+        attribs <- attributes(value_var)[support[["keep.attr"]]] # nocov
       } else {
         attribs <- NULL
       }

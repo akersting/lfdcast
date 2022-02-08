@@ -2,15 +2,20 @@ library(data.table)
 
 test_that("lfdcast produces same results as data.table by", {
   iris <- as.data.table(iris)
-  X <- lfdcast::dcast(iris, "Species", agg(NULL,
-                                           S = gsum(Petal.Length),
-                                           M = gmean(Sepal.Length)))
+  subset <- sample(c(TRUE, FALSE), 150, TRUE)
+
+  agg1 <- agg(list(NULL),
+              S = gsum(Petal.Length),
+              M = gmean(Sepal.Length),
+              subset = subset)
+
+  X <- lfdcast::dcast(iris, "Species", agg1)
   assignInNamespace("cedta.override",
-                    "lfdcast",
+                    c("lfdcast", data.table:::cedta.override),
                     "data.table")
-  Y <- iris[, .(S = sum(Petal.Length), M = mean(Sepal.Length)), keyby = "Species"]
+  Y <- iris[subset, .(S = sum(Petal.Length), M = mean(Sepal.Length)), keyby = "Species"]
   assignInNamespace("cedta.override",
-                    NULL,
+                    data.table:::cedta.override[-1],
                     "data.table")
   expect_identical(X, Y)
 })
@@ -20,12 +25,13 @@ test_that("lfdcast produces same results as data.table::dcast", {
   X <- lfdcast::dcast(iris, "Species", agg("Petal.Width",
                                            Petal.Length_sum = gsum(Petal.Length),
                                            Sepal.Length_mean = gmean(Sepal.Length),
+                                           Sepal.Width_list = glist(Sepal.Width),
                                            names.fun.args = list(prefix.with.colname = FALSE)))
   Y <- data.table::dcast(iris, Species ~ Petal.Width,
-                         fun.aggregate = list(sum, mean),
-                         value.var = list("Petal.Length", "Sepal.Length"),
+                         fun.aggregate = list(sum, mean, list),
+                         value.var = list("Petal.Length", "Sepal.Length", "Sepal.Width"),
                          drop = TRUE)
-  expect_identical(X, Y)
+  expect_equal(X, Y)
 
 
   iris[["Species"]] <- as.character(iris[["Species"]])
@@ -113,12 +119,42 @@ test_that("special features of lfdcast work as expected", {
 
 
 
+  X <- lfdcast::dcast(as.data.table(iris), "Species",
+                      agg(list("Species", c("Species", "Petal.Width")), gsum(Petal.Width),
+                          to.keep = list(data.frame(Species = "setosa"),
+                                         data.frame(Petal.Width = iris$Petal.Width[1:10])),
+                          names.fun.args = list(prefix.with.colname = TRUE)))
+  Y1 <- data.table::dcast(as.data.table(iris), Species ~ Species, fun.aggregate = sum, value.var = "Petal.Width")
+  set(Y1, j = "versicolor", value = NULL)
+  set(Y1, j = "virginica", value = NULL)
+  Y2 <- data.table::dcast(as.data.table(iris), Species ~ Species + Petal.Width, fun.aggregate = sum, value.var = "Petal.Width")
+  Y2 <- Y2[, 2:5]
+
+  Y <- cbind(Y1, Y2)
+  setnames(Y, names(X))
+
+  expect_equal(X, Y)
+
+
+
   expr <- quote(gsum(Petal.Width))
   X <- lfdcast::dcast(as.data.table(iris), "Species",
                       agg("Species", expr, subsetq = Sepal.Width == round(Sepal.Width)), nthread = 1L)
   Y <- data.table::dcast(as.data.table(iris[iris$Sepal.Width == round(iris$Sepal.Width), , drop = FALSE]),
                          Species ~ Species, fun.aggregate = sum, value.var = "Petal.Width")
   expect_equal(X, Y)
+
+
+
+  X <- data.frame(int = 1:100)
+  expect_silent(
+    X <- lfdcast::dcast(X, "int", agg(NULL,
+                                      a = glist(int),
+                                      b = glist(as.numeric(int)),
+                                      c = glist(as.logical(int)),
+                                      d = glist(as.character(int)),
+                                      e = gmin(as.Date(Sys.Date() + int))))
+  )
 })
 
 
@@ -129,6 +165,34 @@ test_that("edgecases work", {
   # 0 column result
   X <- data.frame(a = 1:10, b = 1:10)
   expect_silent(dcast(X, "a", agg("b", xxx = gsum(b), to.keep = data.frame(b = 0))))
+})
+
+test_that("regression test", {
+  skip_on_cran()
+  skip_if_not_installed("digest")
+
+  n <- 1000
+  set.seed(123)
+
+  X <- data.frame(
+    i = sample(c(-156L, -1L, 0L, 1L, 161L, NA_integer_), n, TRUE),
+    n = sample(c(-Inf, -1615, -1, -0, 0, 1, 1561, Inf, NA_real_, NaN), n, TRUE),
+    l = sample(c(TRUE, FALSE, NA), n, TRUE),
+    c = sample(c(letters, NA_character_, ""), n, TRUE),
+    f = factor(sample(c(LETTERS, NA_character_), n, TRUE)),
+    d = as.Date("2022-02-06") + sample(c(-351, -156, 156, 618, NA_real_), n, TRUE)
+  )
+
+  res <- dcast(X, c("n", "i", "l", "f", "d", "c"),
+               agg(c("d", "f", "c", "l", "n", "i"),
+                   i = gsum(i),
+                   n = gmedian(n),
+                   l = gall(l),
+                   c = gfirst(c),
+                   f = glist(f),
+                   d = gmax(d)), assert.valid.names = FALSE)
+  expect_identical(digest::digest(res, algo = "md5"),
+                   "0991b4b4f4e00c4902a4d3e2e865b8d8")
 })
 
 test_that("correct errors are thrown", {

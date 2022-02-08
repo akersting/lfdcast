@@ -100,7 +100,7 @@ getSupport <- function(l, fun.aggregate, expr, value.var) {
 
   # multiple declarations fit equally well
   if (sum(res == res[idx], na.rm = TRUE) != 1L)
-    stop("wrong support specification for fun.aggregate '", fun.aggregate, "'")
+    stop("wrong support specification for fun.aggregate '", fun.aggregate, "'") # nocov
 
   l[[idx]]
 }

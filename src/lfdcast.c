@@ -38,7 +38,7 @@ void *lfdcast_core(void *td_void) {
 
   int *hit = (int *) malloc((size_t) n_row_output * sizeof(int));
   if (hit == NULL) {
-    return "'malloc' failed";
+    return "'malloc' failed"; // # nocov
   }
 
   char *ret = NULL;
@@ -135,10 +135,10 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
     td[i].cols_split = INTEGER(VECTOR_ELT(cols_split, i));
     td[i].length_cols_split = LENGTH(VECTOR_ELT(cols_split, i));
     if (pthread_create(thread_ids + i, NULL, lfdcast_core, (void *) (td + i)) != 0) {
-      REprintf("not all required pthreads could be created\n");
-      failure = 1;
-      nthread = i;
-      break;
+      REprintf("not all required pthreads could be created\n"); // # nocov
+      failure = 1; // # nocov
+      nthread = i; // # nocov
+      break; // # nocov
     }
   }
 
@@ -146,17 +146,17 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
   void *ret;
   for (int i = 0; i < nthread; i++) {
     if (pthread_join(*(thread_ids + i), &ret) != 0) {
-      REprintf("failed to join pthread %d\n", i);
-      failure = 1;
+      REprintf("failed to join pthread %d\n", i); // # nocov
+      failure = 1; // # nocov
     } else if (ret != NULL) {
-      REprintf("an aggregation function failed with '%s'\n", ret);
-      failure = 1;
+      REprintf("an aggregation function failed with '%s'\n", ret); // # nocov
+      failure = 1; // # nocov
     }
   }
 
   PutRNGstate();
 
-  if (failure) error("there were errors in the pthreaded code; see above");
+  if (failure) error("there were errors in the pthreaded code; see above"); // # nocov
 
   for (int j = 0; j < LENGTH(res); j++) {
     if (TYPEOF(VECTOR_ELT(res, j)) == STRSXP) {

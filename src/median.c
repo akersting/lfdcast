@@ -37,20 +37,20 @@ char *median_(void *restrict res, const int typeof_res, const void *restrict val
 
   uniqueN_data = malloc((size_t) n_input_rows_in_output_col * sizeof(struct uniqueN_data));
   if (uniqueN_data == NULL) {
-    ret = "'malloc' failed";
-    goto cleanup;
+    ret = "'malloc' failed"; // # nocov
+    goto cleanup; // # nocov
   }
 
   hist_rank = malloc(sizeof(int[n_pass_rank][n_bucket]));
   if (hist_rank == NULL) {
-    ret = "'malloc' failed";
-    goto cleanup;
+    ret = "'malloc' failed"; // # nocov
+    goto cleanup; // # nocov
   }
 
   hist_value = malloc(sizeof(int[n_pass_value][n_bucket]));
   if (hist_value == NULL) {
-    ret = "'malloc' failed";
-    goto cleanup;
+    ret = "'malloc' failed"; // # nocov
+    goto cleanup; // # nocov
   }
 
   memset(hist_rank, 0, n_pass_rank * n_bucket * sizeof(int));
@@ -83,8 +83,8 @@ char *median_(void *restrict res, const int typeof_res, const void *restrict val
   if (uniqueN_data_length > 0) {
     //isort(uniqueN_data, uniqueN_data_length);
     if (rsort(uniqueN_data, uniqueN_data_length, hist_rank, hist_value, RANK_THEN_VALUE) != 0) {
-      ret = "'rsort' failed (out of memory)";
-      goto cleanup;
+      ret = "'rsort' failed (out of memory)"; // # nocov
+      goto cleanup; // # nocov
     }
     //qsort(uniqueN_data, uniqueN_data_length, sizeof(struct uniqueN_data), uniqueN_int_cmp);
 

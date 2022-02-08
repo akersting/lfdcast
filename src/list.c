@@ -27,10 +27,10 @@ char *list_(void *restrict res, const int typeof_res, const void *restrict value
       data_size = INT2VEC((size_t) hit[i]) * sizeof(VECREC);
       output[i] = malloc(offset + data_size);
       if (output[i] == NULL) {
-        for (int ii = 0; ii < i; ii++) {
-          free(output[ii]);
+        for (int ii = 0; ii < i; ii++) { // # nocov
+          free(output[ii]); // # nocov
         }
-        return "'malloc' failed";
+        return "'malloc' failed"; // # nocov
       }
       memcpy(output[i], hit + i, sizeof(int));
     }
@@ -51,10 +51,10 @@ char *list_(void *restrict res, const int typeof_res, const void *restrict value
       data_size = FLOAT2VEC((size_t) hit[i]) * sizeof(VECREC);
       output[i] = malloc(offset + data_size);
       if (output[i] == NULL) {
-        for (int ii = 0; ii < i; ii++) {
-          free(output[ii]);
+        for (int ii = 0; ii < i; ii++) { // # nocov
+          free(output[ii]); // # nocov
         }
-        return "'malloc' failed";
+        return "'malloc' failed"; // # nocov
       }
       memcpy(output[i], hit + i, sizeof(int));
     }
@@ -75,10 +75,10 @@ char *list_(void *restrict res, const int typeof_res, const void *restrict value
       data_size = INT2VEC((size_t) hit[i]) * sizeof(VECREC);
       output[i] = malloc(offset + data_size);
       if (output[i] == NULL) {
-        for (int ii = 0; ii < i; ii++) {
-          free(output[ii]);
+        for (int ii = 0; ii < i; ii++) { // # nocov
+          free(output[ii]); // # nocov
         }
-        return "'malloc' failed";
+        return "'malloc' failed"; // # nocov
       }
       memcpy(output[i], hit + i, sizeof(int));
     }
@@ -110,7 +110,7 @@ void* list_alloc(R_allocator_t *allocator, size_t size) {
 void list_free(R_allocator_t *allocator, void *addr) {
   allocator_data *data = allocator->data;
   if (addr != data->ptr) {
-    error("'addr' not equal to 'data->ptr' in 'list_free'");
+    error("'addr' not equal to 'data->ptr' in 'list_free'"); // # nocov
   }
 
   free(data->ptr);
@@ -133,8 +133,8 @@ static inline void allocate_scalar_in_list_res(const int i, char **restrict outp
   case STRSXP:
     SET_STRING_ELT(VECTOR_ELT(res_j, i), 0, STRING_ELT(value_var_j, ((int *) (output[i] + offset))[0]));
     break;
-  default:
-    error("unsupported SEXP type for 'x': %s", type2char(TYPEOF(value_var_j)));
+  default: // # nocov
+    error("unsupported SEXP type for 'x': %s", type2char(TYPEOF(value_var_j))); // # nocov
   }
   free(output[i]);
 }
@@ -149,7 +149,7 @@ static inline void allocate_vector_in_list_res(const int i, const int n, char **
 
   allocator_data* data = malloc(sizeof(allocator_data));
   if (data == NULL) {
-    error("'malloc' failed to allocate %zu bytes", sizeof(allocator_data));
+    error("'malloc' failed to allocate %zu bytes", sizeof(allocator_data)); // # nocov
   }
 
   data->ptr = output[i];

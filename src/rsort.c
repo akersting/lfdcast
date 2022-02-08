@@ -7,7 +7,7 @@ int rsort(struct uniqueN_data *restrict x, int n, int hist_rank[restrict][n_buck
 
   struct uniqueN_data *s = (struct uniqueN_data *) malloc(n * sizeof(struct uniqueN_data));
   if (s == NULL) {
-    return 1;
+    return 1; // # nocov
   }
 
   int pass = 0;
@@ -22,12 +22,12 @@ int rsort(struct uniqueN_data *restrict x, int n, int hist_rank[restrict][n_buck
     case 1: goto rank;
     }
     break;  // silence compiler warning
-  case VALUE_THEN_RANK:
+  case VALUE_THEN_RANK: // # nocov start
     switch(step) {
     case 0: goto rank;
     case 1: goto value;
     }
-    break;  // silence compiler warning
+    break;  // silence compiler warning; # nocov end
   }
   goto end;
 

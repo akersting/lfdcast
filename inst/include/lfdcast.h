@@ -39,9 +39,9 @@ static inline int sizeof_type(int type) {
    switch(type) {
    case LGLSXP: return sizeof(int);
    case INTSXP: return sizeof(int);
-   case RAWSXP: return sizeof(double);
+   case REALSXP: return sizeof(double);
    case STRSXP: return sizeof(void *);
-   default: return 0;
+   default: return 0; // #nocov
    }
 }
 
