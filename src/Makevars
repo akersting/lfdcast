@@ -1,2 +1,2 @@
-PKG_CFLAGS = -D_REENTRANT
+PKG_CFLAGS = -D_REENTRANT -Iinclude
 PKG_LIBS = -lpthread

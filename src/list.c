@@ -1,6 +1,8 @@
 #include "lfdcast.h"
 #include "list.h"
 
+#include "vg/memcheck.h"
+
 char *list_(void *restrict res, const int typeof_res, const void *restrict value_var,
             const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
             const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
@@ -161,6 +163,24 @@ static inline void allocate_vector_in_list_res(const int i, const int n, char **
   allocator.data = data;
 
   SET_VECTOR_ELT(res_j, i, allocVector3(TYPEOF(value_var_j), n, &allocator));
+
+  size_t dataptr_size;
+  switch(TYPEOF(value_var_j)) {
+  case LGLSXP:
+  case INTSXP:
+    dataptr_size = n * sizeof(int);
+    break;
+  case REALSXP:
+    dataptr_size = n * sizeof(double);
+    break;
+  case STRSXP:
+    dataptr_size = n * sizeof(void *);
+    break;
+  default:
+    list_free(&allocator, output[i]);
+    error("unsupported SEXP type: %s", type2char(TYPEOF(value_var_j)));
+  }
+  VALGRIND_MAKE_MEM_DEFINED(DATAPTR(VECTOR_ELT(res_j, i)), dataptr_size);
 }
 
 void allocate_list_res(void **restrict res_ptr_j, SEXP res_j, SEXP value_var_j) {
