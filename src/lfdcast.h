@@ -1,5 +1,3 @@
-#define USE_RINTERNALS // for definition of SEXPREC_ALIGN (and DATAPTR)
-
 #include "R.h"
 #include "Rinternals.h"
 

@@ -19,7 +19,8 @@ char *list_(void *restrict res, const int typeof_res, const void *restrict value
     )
   }
 
-  size_t offset = sizeof(R_allocator_t) + sizeof(SEXPREC_ALIGN);
+  SEXP off = allocVector(RAWSXP, 1);
+  size_t offset = sizeof(R_allocator_t) + ((char *) DATAPTR(off) - (char *) off);
   size_t data_size;
 
   if (typeof_value_var == LGLSXP || typeof_value_var == INTSXP) {
@@ -119,9 +120,10 @@ void list_free(R_allocator_t *allocator, void *addr) {
   free(data);
 }
 
-const size_t offset = sizeof(R_allocator_t) + sizeof(SEXPREC_ALIGN);
-
 static inline void allocate_scalar_in_list_res(const int i, char **restrict output, SEXP res_j, SEXP value_var_j) {
+  SEXP off = allocVector(RAWSXP, 1);
+  size_t offset = sizeof(R_allocator_t) + ((char *) DATAPTR(off) - (char *) off);
+
   SET_VECTOR_ELT(res_j, i, allocVector(TYPEOF(value_var_j), 1));
 
   switch(TYPEOF(value_var_j)) {
@@ -142,6 +144,9 @@ static inline void allocate_scalar_in_list_res(const int i, char **restrict outp
 }
 
 static inline void allocate_vector_in_list_res(const int i, const int n, char **restrict output, SEXP res_j, SEXP value_var_j) {
+  SEXP off = allocVector(RAWSXP, 1);
+  size_t offset = sizeof(R_allocator_t) + ((char *) DATAPTR(off) - (char *) off);
+
   if (TYPEOF(value_var_j) == STRSXP) {
     SET_VECTOR_ELT(res_j, i, allocVector(STRSXP, n));
     int_res_to_char_res(output[i] + offset, VECTOR_ELT(res_j, i), value_var_j, n);
