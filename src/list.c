@@ -178,12 +178,9 @@ static inline void allocate_vector_in_list_res(const int i, const int n, char **
   case REALSXP:
     dataptr_size = n * sizeof(double);
     break;
-  case STRSXP:
-    dataptr_size = n * sizeof(void *);
-    break;
-  default:
-    list_free(&allocator, output[i]);
-    error("unsupported SEXP type: %s", type2char(TYPEOF(value_var_j)));
+  default: // # nocov
+    list_free(&allocator, output[i]); // # nocov
+    error("unsupported SEXP type: %s", type2char(TYPEOF(value_var_j))); // # nocov
   }
   VALGRIND_MAKE_MEM_DEFINED(DATAPTR(VECTOR_ELT(res_j, i)), dataptr_size);
 }
