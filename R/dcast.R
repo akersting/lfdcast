@@ -127,32 +127,28 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
              "' given in 'to' are not in 'X'.")
       }
 
-      col_order <- data.table:::forderv(X, by = to, retGrp = TRUE,
-                                        sort = TRUE)
-      col_grp_starts <- attr(col_order, "starts")
+      ranks <- data.table::frankv(X, cols = to, na.last = FALSE,
+                                  ties.method = "dense")
+      ret <- .Call(C_get_map_output_cols_to_input_rows, ranks, max(ranks),
+                   if (length(subset) > 0L) rows2keep else NULL)
+      map_output_cols_to_input_rows <- ret[[1L]]  # 0-based
+      last_row_of_col_grp_idx <- ret[[2L]]  # 1-based
 
-      # handle special case where X is already in correct order
-      if (length(col_order) == 0L) col_order <- seq_len(nrow(X))
-
-      X_first_row_of_col_grp <- data.table::setDT(
-        X[col_order[col_grp_starts], to, drop = FALSE])
+      X_last_row_of_col_grp <- data.table::setDT(
+        X[last_row_of_col_grp_idx, to, drop = FALSE])
 
       if (!is.null(to.keep)) {
         this_to.keep <-
-          merge(X_first_row_of_col_grp,
+          merge(X_last_row_of_col_grp,
                 cbind(unique(to.keep),
                       "LFDCAST__KEEP__" = TRUE),
                 by = names(to.keep),
                 all.x = TRUE,
                 sort = FALSE)[["LFDCAST__KEEP__"]]
       } else {
-        this_to.keep <- rep(TRUE, nrow(X_first_row_of_col_grp))
+        this_to.keep <- rep(TRUE, nrow(X_last_row_of_col_grp))
       }
-
-      map_output_cols_to_input_rows <-
-        .Call(C_get_map_output_cols_to_input_rows, col_order,
-              col_grp_starts, nrow(X), which(this_to.keep),
-              if (length(subset) > 0L) rows2keep else NULL)
+      map_output_cols_to_input_rows <- map_output_cols_to_input_rows[which(this_to.keep)]
 
       n_col_output <- length(map_output_cols_to_input_rows)
 
@@ -238,7 +234,7 @@ dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {
                     NULL
                   },
                   to.cols = if (length(to) > 0) {
-                    list(X_first_row_of_col_grp[which(this_to.keep), , drop = FALSE])
+                    list(X_last_row_of_col_grp[which(this_to.keep), , drop = FALSE])
                   } else {
                     NULL
                   },
