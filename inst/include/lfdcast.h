@@ -3,10 +3,6 @@
 
 #include <Rinternals.h>
 
-#if __has_include(<immintrin.h>)
-#include <immintrin.h>
-#endif
-
 typedef char *(*lfdcast_agg_fun_t)(void *restrict res, const int typeof_res, const void *restrict value_var,
                const int typeof_value_var, const int na_rm, const int *restrict input_rows_in_output_col,
                const int n_input_rows_in_output_col, const int *restrict map_input_rows_to_output_rows,
@@ -41,7 +37,7 @@ static inline int sizeof_type(int type) {
    case INTSXP: return sizeof(int);
    case REALSXP: return sizeof(double);
    case STRSXP: return sizeof(void *);
-   default: return 0; // #nocov
+   default: return 0; // # nocov
    }
 }
 
@@ -54,49 +50,59 @@ static inline int sizeof_type(int type) {
 
 #define PREFETCH_EXPR(...) __VA_ARGS__
 
-#if __has_include(<immintrin.h>)
+#if defined __has_builtin
+#  if __has_builtin (__builtin_prefetch)
+#    define DO_PREFETCH 1
+#  else
+#    define DO_PREFETCH 0
+#  endif
+#else
+#  define DO_PREFETCH 0
+#endif
+
+#if DO_PREFETCH
 #define LOOP_OVER_ROWS_W_PREFETCH(N, WHAT, EXPR)                                                                                 \
    if (N > 0) {                                                                                                                  \
       for (int ii = 0; ii < N && ii < (n_input_rows_in_output_col - N); ii++) {                                                  \
          if ((WHAT) & PREFETCH_OUTPUT || (WHAT) & PREFETCH_HIT) {                                                                \
-            _mm_prefetch(map_input_rows_to_output_rows + input_rows_in_output_col[ii], _MM_HINT_T0);                             \
+            __builtin_prefetch(map_input_rows_to_output_rows + input_rows_in_output_col[ii], 1);                                 \
          }                                                                                                                       \
          if ((WHAT) & PREFETCH_INPUT) {                                                                                          \
             if (IS_VOID_PTR(input)) {                                                                                            \
-               _mm_prefetch((char *) input + sizeof_type(typeof_value_var) * input_rows_in_output_col[ii], _MM_HINT_T0);         \
+               __builtin_prefetch((char *) input + sizeof_type(typeof_value_var) * input_rows_in_output_col[ii], 1);             \
             } else {                                                                                                             \
                _Pragma("GCC diagnostic push")                                                                                    \
                _Pragma("GCC diagnostic ignored \"-Wpointer-arith\"")                                                             \
-               _mm_prefetch(input + input_rows_in_output_col[ii], _MM_HINT_T0);                                                  \
+               __builtin_prefetch(input + input_rows_in_output_col[ii], 1);                                                      \
                _Pragma("GCC diagnostic pop")                                                                                     \
             }                                                                                                                    \
          }                                                                                                                       \
          if ((WHAT) & PREFETCH_OUTPUT) {                                                                                         \
-            _mm_prefetch(output + map_input_rows_to_output_rows[input_rows_in_output_col[ii]], _MM_HINT_T0);                     \
+            __builtin_prefetch(output + map_input_rows_to_output_rows[input_rows_in_output_col[ii]], 1);                         \
          }                                                                                                                       \
          if ((WHAT) & PREFETCH_HIT) {                                                                                            \
-            _mm_prefetch(hit + map_input_rows_to_output_rows[input_rows_in_output_col[ii]], _MM_HINT_T0);                        \
+            __builtin_prefetch(hit + map_input_rows_to_output_rows[input_rows_in_output_col[ii]], 1);                            \
          }                                                                                                                       \
       }                                                                                                                          \
       for (int ii = 0, i; ii < (n_input_rows_in_output_col - N); ii++) {                                                         \
          if ((WHAT) & PREFETCH_OUTPUT || (WHAT) & PREFETCH_HIT) {                                                                \
-            _mm_prefetch(map_input_rows_to_output_rows + input_rows_in_output_col[ii + N], _MM_HINT_T0);                         \
+            __builtin_prefetch(map_input_rows_to_output_rows + input_rows_in_output_col[ii + N], 1);                             \
          }                                                                                                                       \
          if ((WHAT) & PREFETCH_INPUT) {                                                                                          \
             if (IS_VOID_PTR(input)) {                                                                                            \
-               _mm_prefetch((char *) input + sizeof_type(typeof_value_var) * input_rows_in_output_col[ii + N / 2], _MM_HINT_T0); \
+               __builtin_prefetch((char *) input + sizeof_type(typeof_value_var) * input_rows_in_output_col[ii + N / 2], 1);     \
             } else {                                                                                                             \
                _Pragma("GCC diagnostic push")                                                                                    \
                _Pragma("GCC diagnostic ignored \"-Wpointer-arith\"")                                                             \
-               _mm_prefetch(input + input_rows_in_output_col[ii + N / 2], _MM_HINT_T0);                                          \
+               __builtin_prefetch(input + input_rows_in_output_col[ii + N / 2], 1);                                              \
                _Pragma("GCC diagnostic pop")                                                                                     \
             }                                                                                                                    \
          }                                                                                                                       \
          if ((WHAT) & PREFETCH_OUTPUT) {                                                                                         \
-            _mm_prefetch(output + map_input_rows_to_output_rows[input_rows_in_output_col[ii + N / 2]], _MM_HINT_T0);             \
+            __builtin_prefetch(output + map_input_rows_to_output_rows[input_rows_in_output_col[ii + N / 2]], 1);                 \
          }                                                                                                                       \
          if ((WHAT) & PREFETCH_HIT) {                                                                                            \
-            _mm_prefetch(hit + map_input_rows_to_output_rows[input_rows_in_output_col[ii + N / 2]], _MM_HINT_T0);                \
+            __builtin_prefetch(hit + map_input_rows_to_output_rows[input_rows_in_output_col[ii + N / 2]], 1);                    \
          }                                                                                                                       \
          i = input_rows_in_output_col[ii];                                                                                       \
          EXPR                                                                                                                    \
