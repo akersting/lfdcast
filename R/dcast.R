@@ -54,6 +54,22 @@
 #'   the result are invalid or not unique?
 #' @param nthread \emph{a hint} to the function on how many threads to use.
 #'
+#' @examples
+#' head(datasets::esoph)
+#'
+#' lfdcast::dcast(datasets::esoph, by = "agegp",
+#'                alc = agg(to = "alcgp",
+#'                          avg_share_cases = gmean(ncases / (ncases + ncontrols)),
+#'                          any_cases = gany(ncases > 0),
+#'                          subsetq = ncases + ncontrols >= 5,
+#'                          names.fun.args = list(prefix.with.colname = TRUE)),
+#'                tob = agg(to = "tobgp",
+#'                          avg_share_cases = gmean(ncases / (ncases + ncontrols)),
+#'                          any_cases = gany(ncases > 0),
+#'                          subsetq = ncases + ncontrols >= 5,
+#'                          names.fun.args = list(prefix.with.colname = TRUE)),
+#'                assert.valid.names = FALSE)
+#'
 #' @useDynLib lfdcast, .registration = TRUE, .fixes = "C_"
 #' @export
 dcast <- function(X, by, ..., assert.valid.names = TRUE, nthread = 2L) {

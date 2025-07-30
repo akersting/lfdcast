@@ -84,3 +84,20 @@ the default function throws an error.}
 \description{
 Data Frame Casting
 }
+\examples{
+head(datasets::esoph)
+
+lfdcast::dcast(datasets::esoph, by = "agegp",
+               alc = agg(to = "alcgp",
+                         avg_share_cases = gmean(ncases / (ncases + ncontrols)),
+                         any_cases = gany(ncases > 0),
+                         subsetq = ncases + ncontrols >= 5,
+                         names.fun.args = list(prefix.with.colname = TRUE)),
+               tob = agg(to = "tobgp",
+                         avg_share_cases = gmean(ncases / (ncases + ncontrols)),
+                         any_cases = gany(ncases > 0),
+                         subsetq = ncases + ncontrols >= 5,
+                         names.fun.args = list(prefix.with.colname = TRUE)),
+               assert.valid.names = FALSE)
+
+}
