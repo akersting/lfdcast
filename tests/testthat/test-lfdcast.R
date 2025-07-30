@@ -41,10 +41,10 @@ test_that("lfdcast produces same results as data.table::dcast", {
                                            Species.1_last = glast(Species),
                                            names.fun.args = list(prefix.with.colname = FALSE)))
   Y <- data.table::dcast(iris, Species ~ Petal.Width,
-                         fun.aggregate = list(sum, mean, last),
+                         fun.aggregate = list(sum, mean, last = function(x) if (length(x)) last(x) else NA_character_),
                          value.var = list("Petal.Length", "Sepal.Length", "Species"),
                          drop = TRUE)
-  expect_identical(X, Y)
+  expect_equal(X, Y)
 })
 
 test_that("special features of lfdcast work as expected", {

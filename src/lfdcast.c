@@ -149,7 +149,7 @@ SEXP lfdcast(SEXP agg, SEXP value_var, SEXP na_rm,
       REprintf("failed to join pthread %d\n", i); // # nocov
       failure = 1; // # nocov
     } else if (ret != NULL) {
-      REprintf("an aggregation function failed with '%s'\n", ret); // # nocov
+      REprintf("an aggregation function failed with '%s'\n", (char *) ret); // # nocov
       failure = 1; // # nocov
     }
   }
