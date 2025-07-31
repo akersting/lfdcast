@@ -1,13 +1,14 @@
 Package: lfdcast
 Type: Package
-Title: Fast Casting of Large Data
-Version: 0.1.0.9000
+Title: Lean and Fast Data Casting
+Version: 1.0.0
 Authors@R: person("Andreas", "Kersting", role = c("aut", "cre", "cph"),
                   email = "andreas@akersting.de")
-Description: Similar to data.table::dcast (and reshape2::dcast), but
-    faster and more memory efficient.
+Description: Similar to data.table::dcast (and reshape2::dcast), but with a more
+    concise syntax for complex pivoting tasks.
 License: MIT + file LICENSE
 Encoding: UTF-8
+Language: en-US
 LazyData: true
 RoxygenNote: 7.3.2
 Imports: data.table

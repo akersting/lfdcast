@@ -1,0 +1,112 @@
+---
+output:
+  md_document:
+    variant: gfm
+---
+
+# lfdcast: Lean and Fast Data Casting
+
+[![R build status](https://github.com/akersting/lfdcast/R-CMD-check/badge.svg)](https://github.com/akersting/lfdcast/actions?workflow=R-CMD-check)
+
+`lfdcast::dcast()` is similar to `data.table::dcast()` (and `reshape2::dcast()`), while offering a more concise syntax for complex pivoting tasks, i.e. the reshaping of data from long to wide format.
+At the same time it is both performant and memory efficient, also for large datasets with hundreds of millions of observations.
+
+This is achieved by the following means:
+
+- You can specify multiple sets of columns by which to simultaneously spread your data.
+- For each of those sets you can (optionally) apply different filters to the data and then apply multiple aggregation functions to existing columns or to the results of expressions involving one or more columns.
+- `lfdcast::dcast()` uses multi-threading for parallelization over the *output* columns.
+- All aggregations functions are written in C.
+- A lot of the heavy lifting is done by the extremely fast `data.table::frankv()`.
+
+It comes with the following set of built-in aggregation functions, all of which support the additional arguments `na.rm` and `fill`:
+```{r}
+sort(names(lfdcast:::fun.aggregates))
+```
+Generally, it can be extended by writing custom aggregation functions (in C) and registering them using `lfdcast::register_fun.aggregate()`.
+However, a proper documentation of the C-level API is still lacking.
+
+## Example
+
+This example shows how we can use `lfdcast::dcast()` to transform the `esoph` dataset into a wide format.
+
+First, lets have a look at the data itself:
+
+```{r}
+# conver to data.table just for better printing
+X <- data.table::as.data.table(datasets::esoph)
+head(X, 20)
+```
+
+Here is `?datasets::esoph`:
+```{r}
+pkg <- "datasets"
+topic <- "esoph"
+pkgRdDB <- tools:::fetchRdDB(file.path(find.package(pkg), 'help', pkg))
+tools::Rd2txt(pkgRdDB[[topic]], package = pkg, 
+              options = list(underline_titles = FALSE))
+```
+
+Our goal now is to group this data by `agegp` and then
+
+- for each `alcgp`
+  - compute the average share of cases (relative to all observations) across `tobgp`
+  - create logical variables indicating if there are any cases at all
+- create columns indicating which combinations of `alcgp` and `tobgp` are in the data for that `agegp`
+  - once as dummy variables, limited to the values `"20-29"` and `"30+"` of `tobgp`
+  - and once as a single column containing all combinations with at least 20 observations as character vectors
+
+With `lfdcast` all of this can be done in a single function call to `dcast()`:
+
+```{r}
+Y_lf <- lfdcast::dcast(X, by = "agegp",
+                       agg(to = "alcgp", 
+                           avg_share_cases = gmean(ncases / (ncases + ncontrols)),
+                           any_cases = gany(ncases > 0),
+                           names.fun.args = list(prefix.with.colname = TRUE)),
+                       agg(to = c("alcgp", "tobgp"),
+                           any_obs = as.integer(glength_gt0(ncases)),
+                           to.keep = data.frame(tobgp = c("20-29", "30+"))), 
+                       agg(to = NULL, 
+                           big_gps = glist(paste0(alcgp, "_", tobgp)),
+                           subsetq = ncases + ncontrols >= 20),
+                       assert.valid.names = FALSE)
+withr::with_options(
+  list(digits = 3),
+  print(Y_lf)
+)
+```
+
+To achieve the same with plain `data.table`, we need multiple calls to `dcast()`, joins and auxiliary columns:
+
+```{r}
+X[, share_cases := ncases / (ncases + ncontrols)]
+Y_dt <- data.table::dcast(X, agegp ~ alcgp, 
+                          fun.aggregate = list(avg = mean, 
+                                               any = function(x) any(x > 0)), 
+                          value.var = list("share_cases", "ncases"))
+
+Y_dt2 <- data.table::dcast(X, agegp ~ alcgp + tobgp, 
+                           fun.aggregate = function(x) as.integer(length(x) > 0),
+                           value.var = "ncases", 
+                           subset = .(tobgp %in% c("20-29", "30+")))
+Y_dt <- merge(Y_dt, Y_dt2, all = TRUE, by = "agegp")
+
+X[, gps := paste0(alcgp, "_", tobgp)]
+Y_dt2 <- data.table::dcast(X, agegp ~ ., fun.aggregate = list, value.var = "gps", 
+                           subset = .(ncases + ncontrols >= 20))
+Y_dt <- merge(Y_dt, Y_dt2, all = TRUE, by = "agegp")
+list_col <- lapply(Y_dt[, .], function(v) if (is.null(v)) character() else v)
+Y_dt[, . := list_col]
+
+withr::with_options(
+  list(digits = 3),
+  print(Y_dt)
+)
+```
+Both approaches lead to equal results, except for the column names:
+
+```{r}
+stopifnot(all.equal(Y_lf, Y_dt, check.attributes = FALSE))
+```
+
