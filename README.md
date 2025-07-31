@@ -1,7 +1,6 @@
 # lfdcast: Lean and Fast Data Casting
 
-[![R build
-status](https://github.com/akersting/lfdcast/R-CMD-check/badge.svg)](https://github.com/akersting/lfdcast/actions?workflow=R-CMD-check)
+[![R-CMD-check](https://github.com/akersting/lfdcast/actions/workflows/r.yml/badge.svg)](https://github.com/akersting/lfdcast/actions/workflows/r.yml)
 
 `lfdcast::dcast()` is similar to `data.table::dcast()` (and
 `reshape2::dcast()`), while offering a more concise syntax for complex
